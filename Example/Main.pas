@@ -107,10 +107,8 @@ begin
   if (not DirectoryExists(ADir)) then
     ADir := '';
 
+  // create an API Converter instance
   PDFConvert := TGS_PdfConverter.Create(ADir);
-  {$IFDEF DEBUG}
-  PDFConvert.Debug := True;
-  {$ENDIF}
   // set the events for the Ghostscript output
   PDFConvert.OnStdError := StdError;
   PDFConvert.OnStdIn := StdIn;
@@ -127,6 +125,7 @@ begin
   begin
     Ini.WriteString('Path', 'LastFile', LEd_PdfFile.Text);
     Ini.WriteString('Path', 'GS_DLL_Path', GSDllDir);
+    Ini.WriteString('Path', 'ICCProfileDir', ICCProfileDir);
     Ini.WriteString('User', 'Params', M_UserParams.Lines.Text.Replace(#13#10, '*#*'));
     Ini.WriteInteger('User', 'ConvertDevice', RGrp_Devices.ItemIndex);
     FreeAndNil(Ini);
@@ -164,7 +163,7 @@ end;
 
 procedure TFMain.SetCursorToEnd(AMemo: TMemo);
 begin
-  // set the cursor of the memo at the end (auto scroll)
+  // set the cursor at the end of the memo (auto scroll)
   with AMemo do
   begin
     SelStart := Perform(EM_LINEINDEX, Lines.Count - 1, 0) + 0;
@@ -204,6 +203,7 @@ end;
 
 procedure TFMain.StdError(const AText: string);
 begin
+  //write the Ghostscript errors and API messages in a TMemo
   M_Errors.Text := M_Errors.Text + AText;
   SetCursorToEnd(M_Errors);
 end;
@@ -217,11 +217,11 @@ procedure TFMain.StdOut(const AText: string);
 var
   AStr: string;
 begin
+  //write the Ghostscript output in a TMemo
   AStr := AText.Replace(#10, #13#10);
   M_Output.Text := M_Output.Text + AStr;
   SetCursorToEnd(M_Output);
   Application.ProcessMessages;
-  //M_Output.Lines.Add(AText);
 end;
 
 procedure TFMain.Convert;
@@ -243,11 +243,22 @@ begin
 
     PDFConvert.OnAfterExecute := ThreadFinished;
 
-    // debug options for ghostscript
-    //PDFConvert.DebugParams.DebugParams := //[dparSetPageDevice];
-    //  [dparCompiledFonts, dparCffFonts,
-    //  dparCIEColor, dparFontApi, dparTTFFonts, dparInitialization];
+{$IFDEF DEBUG}
+    (* You can set different debug options for th API *)
 
+    // shows the parameters and other informations in the OnStdOut
+    PDFConvert.Debug := True;
+    // shows the communictaion of Ghosscript with API, if you use
+    // PDFConvert.Params.Device = 'display';
+    PDFConvert.GSDisplay.Debug := True;
+
+    // debug options for Ghostscript
+    PDFConvert.DebugParams.DebugParams :=
+      [dparCompiledFonts, dparCffFonts,
+      dparCIEColor, dparFontApi, dparTTFFonts, dparInitialization];
+{$ENDIF}
+    // set a title for the PDF-File
+    // when a Title allready exists this param will be ignored
     PDFConvert.Params.PdfTitle := 'GS Example Title';
 
     case RGrp_Devices.ItemIndex of

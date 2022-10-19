@@ -35,38 +35,75 @@ uses
 
 type
   TGS_PdfConverter = class(TGS_Api)
-  protected
+  private
     FPDFAX_DefFile: string;
+  protected
+    /// <summary>
+    ///  Check that all InFiles exists
+    /// </summary>
     function CheckFiles(const InFiles: array of string): Boolean;
+    /// <summary>
+    ///  Set all parameters and check the files, if everyting is ok this function
+    ///  will execute InitWithArgs
+    /// </summary>
     function Convert(const InFiles: array of string; OutFile: string;
                      Threaded: Boolean = False): Boolean;
+    /// <summary>
+    ///  initialize the API
+    /// </summary>
     procedure Init(ADllPath: string); override;
+    /// <summary>
+    ///  Override SetParams to include a list of UserParams
+    /// </summary>
     procedure SetParams(AList: TStringList); override;
+    /// <summary>
+    ///  Set or replace parameters with the UserParams
+    /// </summary>
     procedure SetUserParams(AParams: TStringList);
+    /// <summary>
+    ///  Will be executed after InitWithArgs is finished, if you set Threaded=True
+    /// </summary>
     procedure ThreadFinished(Sender: TObject); override;
   public
+    /// <summary>
+    ///  Some of the ghostscript parameters they are often used
+    /// </summary>
     Params: TPDFAXParams;
+    /// <summary>
+    ///  A list of ghostscript parameters added before InitWithArgs is executed
+    /// </summary>
     UserParams: TStringList;
     /// <summary>
-    ///  You can set your own PDFA-Definition ps file here. Make sure that the
-    ///  ICC-Profile var in the ps script is named: "ICCProfile".
+    ///  You can set your own PDFA-Definition ps file here.
     /// </summary>
     property PDFA_DefFile: string read FPDFAX_DefFile write FPDFAX_DefFile;
+    // destructor
     destructor Destroy; override;
-    //procedure SetPDFAParams();
     /// <summary>
-    ///
+    ///  Combine and convert all InFiles to a PDF file
     /// </summary>
     function ToPdf(const InFiles: array of string; OutFile: string; Threaded: Boolean = False): Boolean; overload;
+    /// <summary>
+    ///  Convert the InFile to a PDF file
+    /// </summary>
     function ToPdf(InFile, OutFile: string; Threaded: Boolean = False): Boolean; overload;
+    /// <summary>
+    ///  Combine and convert all InFiles to a PDF-A file
+    /// </summary>
     function ToPdfa(const InFiles: array of string; OutFile: string; Threaded: Boolean = False): Boolean; overload;
+    /// <summary>
+    ///  Convert the InFile to a PDF-A file
+    /// </summary>
     function ToPdfa(InFile, OutFile: string; Threaded: Boolean = False): Boolean; overload;
+    /// <summary>
+    ///  Main function to execute Ghostscript commands
+    /// </summary>
     function InitWithArgs(AStrings: TStrings; Threaded: Boolean): Boolean; overload;
   end;
 
 implementation
 
-{$REGION TGS_PdfConverter }
+{$REGION 'TGS_PdfConverter' }
 
 function TGS_PdfConverter.CheckFiles(const InFiles: array of string): Boolean;
 var
@@ -164,14 +201,13 @@ end;
 
 function TGS_PdfConverter.InitWithArgs(AStrings: TStrings; Threaded: Boolean): Boolean;
 begin
-  Result := False;
+  // add a threaded methode to execute InitWithArgs
   if (Threaded) then
   begin
     InitWithArgsStart(AStrings);
+    Result := True;
   end else
-  begin
     Result := inherited InitWithArgs(AStrings);
-  end;
 end;
 
 procedure TGS_PdfConverter.ThreadFinished(Sender: TObject);

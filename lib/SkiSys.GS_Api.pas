@@ -353,23 +353,20 @@ type
     FInitWithArgs: Boolean;
     FInstance: Pointer;
     FLastError: string;
-    FLastErrors: TStringList;
+    FLastErrors: TStringList; // list of errors occured during the process
     FLastErrorCode: Integer;
-    FLogIn: TStringList;
-    FLogOut: TStringList;
     FThreadRunning: Boolean;
     FThreadUsed: Boolean;
     function GetLastErrors: string;
     /// <summary>
-    ///  Register all callouts to receive messages from the Ghostscript library
+    ///  Register all callouts to communicate with the Ghostscript library
     /// </summary>
     procedure SetCallouts;
-    procedure SetLastErrorInternal(AText: string; AErrorCode: Integer = 0);
-    /// <summary>
-    ///  Internal methode to call the StdError/StdIn/StdOut functions
-    /// </summary>
-    procedure StdFunc(AStr: string; AFunc: TGSEvent_Std);
+    procedure SetLastErrorInternal(AText: string; AErrorCode: Integer = -1);
+    function GetLogStdOut: TStrings;
   protected
+    FLogStdIn: TStringList;  // log StdIn
+    FLogStdOut: TStringList; // log StdOut
     /// <summary>
     ///  Clear the internal log vars
     /// </summary>
@@ -414,7 +411,7 @@ type
     /// <summary>
     ///  Set the last error from the API and the Ghostscript lirary
     /// </summary>
-    procedure SetLastError(AText: string; AErrorCode: Integer = 0); virtual;
+    procedure SetLastError(AText: string; AErrorCode: Integer = -1); virtual;
     /// <summary>
     ///  Set the last error code from the API aund the Ghostscript lirary
     /// </summary>
@@ -424,15 +421,15 @@ type
     /// </summary>
     procedure SetParams(AList: TStringList); virtual;
     /// <summary>
-    ///  Set the StdError with usefull informations and call the OnStdError Event
+    ///  Set the StdError and call the OnStdError Event
     /// </summary>
     procedure StdError(AText: string); virtual;
     /// <summary>
-    ///  Set the StdIn with usefull informations and call the OnStdIn Event
+    ///  Set the StdIn and call the OnStdIn Event
     /// </summary>
     procedure StdIn(AText: string); virtual;
     /// <summary>
-    ///  Set the StdOut with usefull informations and call the OnStdOut Event
+    ///  Set the StdOut and filter some informations and call the OnStdOut Event
     /// </summary>
     procedure StdOut(AText: string); virtual;
     /// <summary>
@@ -484,7 +481,10 @@ type
     ///  debug informations.
     /// </summary>
     property OnStdOut: TGSEvent_Std read FEventStdOut write FEventStdOut;
-
+    /// <summary>
+    ///  The API stores the full informations of the StdOut here
+    /// </summary>
+    property StdOutLog: TStrings read GetLogStdOut;
   public (*** PUBLIC METHODS ***)
     /// <summary>
     ///  default constructor
@@ -695,8 +695,8 @@ begin
   FLastErrors.Clear;
   FLastError := '';
   FLastErrorCode := 0;
-  FLogIn.Clear;
-  FLogOut.Clear;
+  FLogStdIn.Clear;
+  FLogStdOut.Clear;
 end;
 
 constructor TGS_Api.Create(ADllPath: string);
@@ -718,10 +718,10 @@ begin
     FreeAndNil(FDebugParams);
   if (FLastErrors <> nil) then
     FreeAndNil(FLastErrors);
-  if (FLogIn <> nil) then
-    FreeAndNil(FLogIn);
-  if (FLogOut <> nil) then
-    FreeAndNil(FLogOut);
+  if (FLogStdIn <> nil) then
+    FreeAndNil(FLogStdIn);
+  if (FLogStdOut <> nil) then
+    FreeAndNil(FLogStdOut);
   if (FRevision <> nil) then
     FreeAndNil(FRevision);
   FreeGSInstance;
@@ -751,6 +751,11 @@ end;
 function TGS_Api.GetLastErrors: string;
 begin
   Result := FLastErrors.Text;
+end;
+
+function TGS_Api.GetLogStdOut: TStrings;
+begin
+  Result := FLogStdOut;
 end;
 
 function TGS_Api.GetPAnsiCharArray(AAnsiStrings: TAnsiStringArray): PArgv;
@@ -812,10 +817,10 @@ procedure TGS_Api.InitInternalLog;
 begin
   if (FLastErrors = nil) then
     FLastErrors := TStringList.Create;
-  if (FLogIn = nil) then
-    FLogIn := TStringList.Create;
-  if (FLogOut = nil) then
-    FLogOut := TStringList.Create;
+  if (FLogStdIn = nil) then
+    FLogStdIn := TStringList.Create;
+  if (FLogStdOut = nil) then
+    FLogStdOut := TStringList.Create;
 end;
 
 function TGS_Api.InitWithArgs(AArgs: PArgv): Boolean;
@@ -889,7 +894,7 @@ begin
   FLastErrorCode := 0;
 end;
 
-procedure TGS_Api.SetLastError(AText: string; AErrorCode: Integer = 0);
+procedure TGS_Api.SetLastError(AText: string; AErrorCode: Integer = -1);
 begin
   if (AText <> '') then
   begin
@@ -905,7 +910,7 @@ begin
   FLastErrorCode := Integer(ACode);
 end;
 
-procedure TGS_Api.SetLastErrorInternal(AText: string; AErrorCode: Integer = 0);
+procedure TGS_Api.SetLastErrorInternal(AText: string; AErrorCode: Integer = -1);
 begin
   FLastError := AText;
   FLastErrors.Add(AText);
@@ -950,15 +955,9 @@ begin
   end;
 end;
 
-procedure TGS_Api.StdFunc(AStr: string; AFunc: TGSEvent_Std);
-begin
-  if (Assigned(AFunc)) then
-    AFunc(AStr);
-end;
-
 procedure TGS_Api.StdIn(AText: string);
 begin
-  FLogIn.Add(AText);
+  FLogStdIn.Add(AText);
   if (Assigned(FEventStdIn)) then
     FEventStdIn(AText);
 end;
@@ -968,7 +967,7 @@ var
   AStr: string;
 begin
   AStr := AText.Replace(#10, #13#10);
-  FLogOut.Text := FLogOut.Text + AStr;
+  FLogStdOut.Text := FLogStdOut.Text + AStr;
   if (Assigned(FEventStdOut)) then
     FEventStdOut(AStr);
 end;
