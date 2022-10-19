@@ -1,0 +1,74 @@
+(start processing PDFA_def.ps\n) print
+
+%% check if the ICC Profile Parameter exists
+/ICCProfile where {
+	/ICCProfile get
+	% show in the StdOut which ICC Profile is used
+	(PDF ICC-Profile used ) print ==
+}{
+	(Error: ICCProfile not defined)  = /ICCProfile cvx /undefinedfilename signalerror
+} ifelse
+
+%% check if a OutputConditionIdentifier is set or use a default value
+%% this has to match the ICC Profile
+/PDFOutputConditionIdentifier where {
+	/PDFOutputConditionIdentifier get
+	(Use Output Condition Identifier: ) print ==
+}{
+	/PDFOutputConditionIdentifier (CGATS TR001)
+	(Output Condition Identifier set to default: "CGATS TR001") print
+} ifelse
+
+%% Check if the option -sPDFTitle=  is set
+/PDFTitle where {
+	/PDFTitle get
+	(PDFTitle is ) print ==
+}{
+	/PDFTitle (Unknown Title)
+} ifelse
+
+
+%% Define entries in the document Info dictionary :
+[/Title PDFTitle
+/Creator (AFPL Ghostscript 9.56.1 PDF Writer)
+/DOCINFO pdfmark
+
+%% Set the ICC profile wit hdevice specific information with the ProcessColorModel:
+[/_objdef {icc_PDFA} /type /stream /OBJ pdfmark
+[{icc_PDFA} <<
+	/N currentpagedevice /ProcessColorModel known {
+		currentpagedevice /ProcessColorModel get dup /DeviceGray eq {
+			pop 1
+		} {
+			/DeviceRGB eq {3} {4} ifelse
+		} ifelse
+	} {
+		(ERROR, unable to determine ProcessColorModel) == flush
+	} ifelse
+>> /PUT pdfmark
+
+[
+{icc_PDFA}
+{ICCProfile (r) file} stopped
+{
+  (\n\tFailed to open the supplied ICCProfile for reading. This may be due to\n) print
+  (\t  an incorrect filename or a failure to add --permif-file-read=<profile>\n) print
+  (\t  to the command line. This PostScript program needs to open the file\n) print
+  (\t  and you must explicitly grant it permission to do so.\n\n) print
+  (\tPDF/A processing aborted, output may not be a PDF/A file.\n\n) print
+  cleartomark
+}
+{
+  /PUT pdfmark
+
+  %% Define the output intent dictionary :
+
+  [/_objdef {OutputIntent_PDFA} /type /dict /OBJ pdfmark
+  [{OutputIntent_PDFA} <<
+    /Type /OutputIntent               % Must be so (the standard requires).
+    /S /GTS_PDFA1                     % Must be so (the standard requires).
+    /DestOutputProfile {icc_PDFA}     % Must be so (see above).
+    /OutputConditionIdentifier PDFOutputConditionIdentifier
+  >> /PUT pdfmark
+  [{Catalog} <</OutputIntents [ {OutputIntent_PDFA} ]>> /PUT pdfmark
+} ifelse
