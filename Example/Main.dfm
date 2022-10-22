@@ -4,7 +4,7 @@ object FMain: TFMain
   Anchors = [akLeft, akTop, akRight, akBottom]
   Caption = 'Ghostscript API Example'
   ClientHeight = 620
-  ClientWidth = 753
+  ClientWidth = 760
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -19,21 +19,24 @@ object FMain: TFMain
   object Pages: TPageControl
     Left = 0
     Top = 0
-    Width = 753
+    Width = 760
     Height = 620
     ActivePage = Tab_Operation
     Align = alClient
     TabOrder = 0
+    ExplicitWidth = 753
     object Tab_Operation: TTabSheet
       Caption = 'Convert'
+      ExplicitWidth = 745
       DesignSize = (
-        745
+        752
         592)
       object SBtn_OpenFile: TSpeedButton
         Left = 719
-        Top = 10
+        Top = 9
         Width = 23
         Height = 21
+        Anchors = [akTop, akRight]
         Caption = '...'
         OnClick = SBtn_OpenFileClick
       end
@@ -51,6 +54,7 @@ object FMain: TFMain
         Top = 10
         Width = 681
         Height = 21
+        Anchors = [akLeft, akTop, akRight]
         EditLabel.Width = 20
         EditLabel.Height = 13
         EditLabel.Caption = 'File:'
@@ -60,7 +64,7 @@ object FMain: TFMain
       object M_UserParams: TMemo
         Left = 8
         Top = 83
-        Width = 737
+        Width = 744
         Height = 129
         Hint = 'You can insert here Ghostscrip Userparams'
         Anchors = [akLeft, akTop, akRight]
@@ -68,11 +72,12 @@ object FMain: TFMain
         ScrollBars = ssVertical
         ShowHint = True
         TabOrder = 2
+        ExplicitWidth = 737
       end
       object M_Output: TMemo
         Left = 8
         Top = 216
-        Width = 737
+        Width = 744
         Height = 248
         Hint = 'Shows the Ghostscript Standard output'
         Anchors = [akLeft, akTop, akRight, akBottom]
@@ -81,11 +86,12 @@ object FMain: TFMain
         ScrollBars = ssVertical
         ShowHint = True
         TabOrder = 3
+        ExplicitWidth = 737
       end
       object M_Errors: TMemo
         Left = 8
         Top = 470
-        Width = 737
+        Width = 744
         Height = 122
         Hint = 'Shows the Errors'
         Anchors = [akLeft, akRight, akBottom]
@@ -94,12 +100,14 @@ object FMain: TFMain
         ScrollBars = ssVertical
         ShowHint = True
         TabOrder = 4
+        ExplicitWidth = 737
       end
       object RGrp_Devices: TRadioGroup
         Left = 89
         Top = 34
         Width = 624
         Height = 40
+        Anchors = [akLeft, akTop, akRight]
         Caption = 'Convert Device'
         Columns = 5
         ItemIndex = 0
@@ -114,14 +122,10 @@ object FMain: TFMain
     object Tab_PDFView: TTabSheet
       Caption = 'PDF Preview'
       ImageIndex = 1
-      ExplicitLeft = 0
-      ExplicitTop = 0
-      ExplicitWidth = 0
-      ExplicitHeight = 0
       object P_PDF_Top: TPanel
         Left = 0
         Top = 0
-        Width = 745
+        Width = 752
         Height = 41
         Align = alTop
         BevelOuter = bvNone
@@ -159,7 +163,7 @@ object FMain: TFMain
       object ScrollBoxImage: TScrollBox
         Left = 0
         Top = 41
-        Width = 745
+        Width = 752
         Height = 551
         Align = alClient
         TabOrder = 1

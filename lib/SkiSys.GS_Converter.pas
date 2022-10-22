@@ -41,9 +41,9 @@ type
     /// <summary>
     ///  Check that all InFiles exists
     /// </summary>
-    function CheckFiles(const InFiles: array of string): Boolean;
+    function CheckFiles(const InFiles: array of string): Boolean; virtual;
     /// <summary>
-    ///  Set all parameters and check the files, if everyting is ok this function
+    ///  Set all parameters and check the files, if everything is ok this function
     ///  will execute InitWithArgs
     /// </summary>
     function Convert(const InFiles: array of string; OutFile: string;
@@ -59,12 +59,12 @@ type
     /// <summary>
     ///  Set or replace parameters with the UserParams
     /// </summary>
-    procedure SetUserParams(AParams: TStringList);
+    procedure SetUserParams(AParams: TStringList); virtual;
     /// <summary>
-    ///  Will be executed after InitWithArgs is finished, if you set Threaded=True
+    ///  Will be executed after InitWithArgs is finished
     /// </summary>
     procedure ThreadFinished(Sender: TObject); override;
-  public
+  public (*** PROPERTIES AND VARS ***)
     /// <summary>
     ///  Some of the ghostscript parameters they are often used
     /// </summary>
@@ -77,6 +77,7 @@ type
     ///  You can set your own PDFA-Definition ps file here.
     /// </summary>
     property PDFA_DefFile: string read FPDFAX_DefFile write FPDFAX_DefFile;
+  public (*** METHODS ***)
     // destructor
     destructor Destroy; override;
     /// <summary>
@@ -108,26 +109,18 @@ implementation
 function TGS_PdfConverter.CheckFiles(const InFiles: array of string): Boolean;
 var
   i: Integer;
-  AErrors: string;
 begin
   Result := True;
-  AErrors := '';
   for i := 0 to High(InFiles) do
   begin
     if (not FileExists(InFiles[i])) then
     begin
-      if (AErrors <> '') then
-        AErrors := AErrors + #13#10;
       SetLastError(Format('The File: %s does not exist', [InFiles[i]]));
-      AErrors := AErrors + LastError;
       Result := False;
     end;
   end;
   if (not Result) then
-  begin
-    SetLastErrorCode(gs_error_unknownerror); // Error Code defined from Ghostscript
-    raise EFileNotFoundException.Create(AErrors);
-  end;
+    SetLastErrorCode(gs_error_ioerror); // Error Code defined from Ghostscript
 end;
 
 function TGS_PdfConverter.Convert(const InFiles: array of string;
@@ -148,24 +141,25 @@ begin
       // Expand all Filenames to a Full Path
       Dir := GetCurrentDir + '\';
       for i := Low(InFiles) to High(InFiles) do
-      begin
-        if (not InFiles[i].Substring(1).StartsWith(':')) then
-          FileList.Add(ExpandFileName(InFiles[i]))
-        else
-          FileList.Add(InFiles[i]);
-      end;
+        FileList.Add(InFiles[i]);
       try
         Params.SetParams(AList);
         // Set Debug and Other Params
         SetParams(AList);
         if (OutFile <> '') then
-          AList.Add('-sOutputFile=' + Params.GetLinuxFilePath(OutFile));
+          AList.Add('-sOutputFile=' + Params.GetFullLinuxFilePath(OutFile, True));
+
+        // All given files have to be in the Linux File Format,
+        // otherwise gs may produce device input errors
+        // The changes in version 10.00.0 need a case sensitive filename
+        // so we add the files case sensitive and in Linux File Format
         for i := 0 to FileList.Count - 1 do
-          // All given files have to be in the Linux File Format,
-          // otherwise gs will produce device input errors
-          AList.Add(Params.GetLinuxFilePath(FileList[i]));
+          AList.Add(Params.GetFullLinuxFilePath(FileList[i]));
       except
-        ThreadFinished(Self);
+        on E: Exception do
+        begin
+          ThreadFinished(Self);
+        end;
       end;
       Result := InitWithArgs(AList, Threaded);
     finally

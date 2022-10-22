@@ -50,8 +50,6 @@ type
   display_callback = Pointer;
 {$ENDIF}
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_revision(gsapi_revision_t *pr, int len);
   /// <summary>
   ///  Get version numbers and strings.
   ///  This is safe to call at any time.
@@ -66,8 +64,6 @@ type
   function gsapi_revision(pr: p_gsapi_revision_t; len: Integer): Integer;
                           stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_new_instance(void **pinstance, void *caller_handle);
   /// <summary>
   ///  Create a new instance of Ghostscript.
   ///  This instance is passed to most other API functions.
@@ -77,8 +73,6 @@ type
                               caller_handle: Pointer): Integer;
                               stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT void GSDLLAPI
-  //gsapi_delete_instance(void *instance);
   /// <summary>
   ///  Destroy an instance of Ghostscript
   ///  Before you call this, Ghostscript must have finished.
@@ -100,12 +94,6 @@ type
                            stdout: stdout_fn_t; stderr: stderr_fn_t): Integer;
                            stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_set_stdio_with_handle(void *instance,
-  //    int (GSDLLCALLPTR stdin_fn)(void *caller_handle, char *buf, int len),
-  //    int (GSDLLCALLPTR stdout_fn)(void *caller_handle, const char *str, int len),
-  //    int (GSDLLCALLPTR stderr_fn)(void *caller_handle, const char *str, int len),
-  //    void *caller_handle);
   /// <summary>
   ///  Does the same as the above, but using the caller_handle given here,
   ///  rather than the default one specified at gsapi_new_instance time.
@@ -116,8 +104,6 @@ type
                                        stdcall; external GS_DLL delayed;
 
 
-  //GSDLLEXPORT int GSDLLAPI gsapi_set_poll(void *instance,
-  //    int (GSDLLCALLPTR poll_fn)(void *caller_handle));
   /// <summary>
   ///  Set the callback function for polling.
   ///  This is used for handling window events or cooperative
@@ -131,8 +117,6 @@ type
   function gsapi_set_poll(instance: Pointer; poll_fn: poll_fn_t): Integer;
                           stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI gsapi_set_poll_with_handle(void *instance,
-  //    int (GSDLLCALLPTR poll_fn)(void *caller_handle), void *caller_handle);
   /// <summary>
   ///  Does the same as the above, but using the caller_handle given here,
   ///  rather than the default one specified at gsapi_new_instance time.
@@ -141,8 +125,6 @@ type
                                       caller_handle: Pointer): Integer;
                                       stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI gsapi_set_display_callback(
-  //   void *instance, display_callback *callback);
   /// <summary>
   ///  Set the display device callback structure.
   ///  If the display device is used, this must be called
@@ -155,8 +137,6 @@ type
                                       stdcall; external GS_DLL delayed;
            deprecated 'Use the gsapi_register_callout mechanism instead.';
 
-  //GSDLLEXPORT int GSDLLAPI gsapi_register_callout(
-  //   void *instance, gs_callout callout, void *callout_handle);
   /// <summary>
   ///  Register a handler for gs callouts.
   ///  This must be called after gsapi_new_instance() and (typically)
@@ -166,8 +146,6 @@ type
                                   callout_handle: Pointer): Integer;
                                   stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT void GSDLLAPI gsapi_deregister_callout(
-  //   void *instance, gs_callout callout, void *callout_handle);
   /// <summary>
   ///  Deregister a handler for gs callouts.
   /// </summary>
@@ -175,8 +153,6 @@ type
                                      callout_handle: Pointer);
                                      stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_set_default_device_list(void *instance, const char *list, int listlen);
   /// <summary>
   ///  Set the string containing the list of default device names
   ///  for example "display x11alpha x11 bbox". Allows the calling
@@ -189,8 +165,6 @@ type
                                          list: PAnsiChar; listlen: Integer): Integer;
                                          stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_get_default_device_list(void *instance, char **list, int *listlen);
   /// <summary>
   ///  Returns a pointer to the current default device string
   ///  *Must* be called after gsapi_new_instance().
@@ -200,8 +174,6 @@ type
                                          listlen: PInteger): Integer;
                                          stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI gsapi_set_arg_encoding(void *instance,
-  //                                                int encoding);
   /// <summary>
   ///  Set the encoding used for the args. By default we assume
   ///  'local' encoding. For windows this equates to whatever the current
@@ -213,8 +185,6 @@ type
                                   stdcall; external GS_DLL delayed;
 
 
-  //GSDLLEXPORT int GSDLLAPI gsapi_init_with_args(void *instance,
-  //    int argc, char **argv);
   /// <summary>
   ///  Initialise the interpreter.
   ///  This calls gs_main_init_with_args() in imainarg.c <para/>
@@ -232,20 +202,13 @@ type
                                 stdcall; external GS_DLL delayed;
 
   {$IF Defined(MSWindows)}
-  //GSDLLEXPORT int GSDLLAPI gsapi_init_with_argsA(void *instance,
-  //    int argc, char **argv);
   function gsapi_init_with_argsA(instance: Pointer; argc: Integer; argv: PArgv): Integer;
                                  stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI gsapi_init_with_argsW(void *instance,
-  //    int argc, wchar_t **argv);
   function gsapi_init_with_argsW(instance: Pointer; argc: Integer; argv: PArgv): Integer;
                                  stdcall; external GS_DLL delayed;
   {$ENDIF}
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_run_string_begin(void *instance,
-  //    int user_errors, int *pexit_code);
   /// <summary>
   ///  The gsapi_run_* functions are like gs_main_run_* except
   ///  that the error_object is omitted.
@@ -259,68 +222,44 @@ type
                                   pexit_code: PInteger): Integer;
                                   stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_run_string_continue(void *instance,
-  //    const char *str, unsigned int length, int user_errors, int *pexit_code);
   function gsapi_run_string_continue(instance: Pointer;
                                      const str: PAnsiChar; length: UInt;
                                      user_errors: Integer;
                                      pexit_code: PInteger): Integer;
                                      stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_run_string_end(void *instance,
-  //    int user_errors, int *pexit_code);
   function gsapi_run_string_end(instance: Pointer;
                                 user_errors: Integer; pexit_code: PInteger): Integer;
                                 stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_run_string_with_length(void *instance,
-  //    const char *str, unsigned int length, int user_errors, int *pexit_code);
   function gsapi_run_string_with_length(instance: Pointer;
                                         const str: PAnsiChar; length: UInt;
                                         user_errors: Integer;
                                         pexit_code: PInteger): Integer;
                                         stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_run_string(void *instance,
-  //    const char *str, int user_errors, int *pexit_code);
   function gsapi_run_string(instance: Pointer;
                             const str: PAnsiChar; user_errors: Integer;
                             pexit_code: PInteger): Integer;
                             stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_run_file(void *instance,
-  //    const char *file_name, int user_errors, int *pexit_code);
   function gsapi_run_file(instance: Pointer;
                           const file_name: PAnsiChar;
                           user_errors: Integer; pexit_code: PInteger): Integer;
                           stdcall; external GS_DLL delayed;
 
   {$ifdef __WIN32__}
-  //TODO: Have a look in Delphis A / W declarations for the right string data types
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_run_fileA(void *instance,
-  //    const char *file_name, int user_errors, int *pexit_code);
   function gsapi_run_fileA(instance: Pointer;
                           const file_name: PAnsiChar;
                           user_errors: Integer; pexit_code: PInteger): Integer;
                           stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_run_fileW(void *instance,
-  //    const wchar_t *file_name, int user_errors, int *pexit_code);
   function gsapi_run_fileW(instance: Pointer;
                           const file_name: PAnsiChar;
                           user_errors: Integer; pexit_code: PInteger): Integer;
                           stdcall; external GS_DLL delayed;
   {$endif}
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_exit(void *instance);
   /// <summary>
   ///  Exit the interpreter.
   ///  This must be called on shutdown if gsapi_init_with_args()
@@ -329,9 +268,6 @@ type
   function gsapi_exit(instance: Pointer): Integer;
                       stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_set_param(void *instance,
-  //                const char *param, const void *value, gs_set_param_type type);
   /// <summary>
   ///  gs_spt_parsed allows for a string such as "<< /Foo 0 /Bar true >>" or
   ///  "[ 1 2 3 ]" etc to be used so more complex parameters can be set. ///
@@ -341,9 +277,6 @@ type
                            atype: gs_set_param_type): Integer;
                            stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_get_param(void *instance,
-  //                const char *param, void *value, gs_set_param_type type);
   /// <summary>
   ///  Called to get a value. value points to storage of the appropriate
   ///  type. If value is passed as NULL on entry, then the return code is
@@ -375,10 +308,6 @@ type
   ///       // Process key
   ///   }
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_enumerate_params(void *instance,
-  //                       void **iterator, const char **key,
-  //                       gs_set_param_type *type);
   /// <summary>
   ///  Note that the ordering of enumerations is NOT defined. key is valid
   ///  until the next call to gsapi_enumerate_params. Only one enumeration
@@ -391,39 +320,29 @@ type
                                   atype: gs_set_param_type): Integer;
                                   stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_add_control_path(void *instance, int type, const char *path);
   /// <summary>
-  ///  Add a path to one of the sets of permitted paths. ///
+  ///  Add a path to one of the sets of permitted paths.
   /// </summary>
   function gsapi_add_control_path(instance: Pointer;
                                   atype: Integer; const path: PAnsiChar): Integer;
                                   stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_remove_control_path(void *instance, int type, const char *path);
   /// <summary>
-  ///  Remove a path from one of the sets of permitted paths. ///
+  ///  Remove a path from one of the sets of permitted paths.
   /// </summary>
   function gsapi_remove_control_path(instance: Pointer;
                                      atype: Integer; const path: PAnsiChar): Integer;
                                      stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT void GSDLLAPI
-  //gsapi_purge_control_paths(void *instance, int type);
   /// <summary>
-  ///  Purge all the paths from the one of the sets of permitted paths. ///
+  ///  Purge all the paths from the one of the sets of permitted paths.
   /// </summary>
   procedure gsapi_purge_control_paths(instance: Pointer; atype: Integer);
                                       stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT void GSDLLAPI
-  //gsapi_activate_path_control(void *instance, int enable);
   procedure gsapi_activate_path_control(instance: Pointer; enable: Integer);
                                         stdcall; external GS_DLL delayed;
 
-  //GSDLLEXPORT int GSDLLAPI
-  //gsapi_is_path_control_active(void *instance);
   function gsapi_is_path_control_active(instance: Pointer): Integer;
                                         stdcall; external GS_DLL delayed;
 

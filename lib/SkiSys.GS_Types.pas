@@ -34,19 +34,24 @@ uses
 
   // C declaration is 4 byte long we need it for the DLL implementation
   {$MINENUMSIZE 4}
+
 const
-  {$IFDEF WIN32}
+{$IFDEF WIN32}
+  GS_EXE = 'gswin32.exe';
+  GS_CMD_EXE = 'gswin32c.exe';
   GS_DLL = 'gsdll32.dll';
-  {$ELSE}
+{$ELSE}
+  GS_EXE = 'gswin64.exe';
+  GS_CMD_EXE = 'gswin64c.exe';
   GS_DLL = 'gsdll64.dll';
-  {$ENDIF}
+{$ENDIF}
 
 type
   PArgv = array of PAnsiChar;
   PList = PArgv;
 
   p_gsapi_revision_t = ^gsapi_revision_t;
-  gsapi_revision_t = packed record
+  gsapi_revision_t = record
     product: PAnsiChar;
     copyright: PAnsiChar;
     revision: LongInt;
@@ -122,7 +127,6 @@ type
     GS_PERMIT_FILE_CONTROL = 2
   );
 
-
   /// <summary>
   ///  Details of gp_file can be found in gp.h.
   ///  Users wanting to use this function should include
@@ -133,6 +137,9 @@ type
   {$ifndef gp_file_name_sizeof}
     {$define gp_file_name_sizeof 4096}
   {$endif}
+
+  // SkiSys.GS_Api
+  // at the moment is gp_file.h not included in the API
 
   (*
   typedef struct

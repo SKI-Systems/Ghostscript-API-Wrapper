@@ -229,13 +229,13 @@ type
   TDisplayEvent = function(handle, device: Pointer): Integer; cdecl;
   PDisplayPresizeEvent = ^TDisplayPresizeEvent;
   TDisplayPresizeEvent = function(handle, device: Pointer;
-                                 width, height, raster: Integer;
-                                 format: Cardinal): Integer; cdecl;
+                                  width, height, raster: Integer;
+                                  format: Cardinal): Integer; cdecl;
 
   PDisplaySizeEvent = ^TDisplaySizeEvent;
   TDisplaySizeEvent = function(handle, device: Pointer;
-                              width, height, raster: Integer;
-                              format: Cardinal; pimage: PByte): Integer; cdecl;
+                               width, height, raster: Integer;
+                               format: Cardinal; pimage: PByte): Integer; cdecl;
 
   PDisplayPageEvent = ^TDisplayPageEvent;
   TDisplayPageEvent = function(handle, device: Pointer;
@@ -267,7 +267,7 @@ type
                                            out x, y, w, h: Integer): Integer; cdecl;
 
 
-  display_callback_s = packed record
+  display_callback_s = record
     (* Size of this structure *)
     (* Used for checking if we have been handed a valid structure *)
     size: Integer;

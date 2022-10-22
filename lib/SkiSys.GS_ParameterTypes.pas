@@ -35,7 +35,7 @@ interface
 
 uses
   SkiSys.GS_ParameterConst, SkiSys.GS_gdevdsp,
-  System.Classes, System.SysUtils, WinApi.Windows;
+  System.Classes, System.SysUtils, WinApi.Windows, Vcl.Graphics;
 
 type
   /// <summary>
@@ -45,6 +45,7 @@ type
   protected
     FBatch: Boolean;
     FDevice: string;
+    FDDpi: Integer;
     FDisplayFormat: Integer;
     FGenericResourceDir: string;
     FNoSaver: Boolean;
@@ -52,32 +53,67 @@ type
     FQuiet: Boolean;
     FSources: string;
     /// <summary>
-    ///  Search or Include path of other files like the ICCProfile path and Fonts
-    /// </summary>
-    property Sources: string read FSources;
-    /// <summary>
-    ///  Read the display format from the system
+    ///  Read the display format and the resolution from the device context of
+    ///  the desktop, when they are set to default 0
     /// </summary>
     procedure GetDisplayFormat; virtual;
+    /// <summary>
+    ///  Set the default values
+    /// </summary>
+    procedure SetDefaultValues; virtual;
     /// <summary>
     ///  Used to set the Params in the Ghostscript format
     /// </summary>
     procedure SetParameters(AParams: TStringList); virtual;
-  public
+    /// <summary>
+    ///  Search or Include path of other files like the ICCProfile path and Fonts
+    /// </summary>
+    property Sources: string read FSources;
+  public (*** PROPERTIES ***)
     property Batch: Boolean read FBatch write FBatch;
+    /// <summary>
+    ///  Set the
+    /// </summary>
+    property DDpi: Integer read FDDpi write FDDpi;
     /// <summary>
     ///  The target device for the output
     /// </summary>
     property Device: string read FDevice write FDevice;
+    /// <summary>
+    ///
+    /// </summary>
     property DisplayFormat: Integer read FDisplayFormat write FDisplayFormat;
+    /// <summary>
+    ///
+    /// </summary>
     property NoSaver: Boolean read FNoSaver write FNoSaver;
+    /// <summary>
+    ///
+    /// </summary>
     property NoPause: Boolean read FNoPause write FNoPause;
+    /// <summary>
+    ///
+    /// </summary>
     property Quiet: Boolean read FQuiet write FQuiet;
+  public (*** METHODS ***)
+    /// <summary>
+    ///
+    /// </summary>
     procedure AddSourcePath(APath: string);
+    // constructor
+    constructor Create; reintroduce;
     /// <summary>
     ///  Get the full Linux file path to avoid Ghostscript Errors
     /// </summary>
-    function GetFullLinuxFilePath(AFile: string): string;
+    /// <returns>
+    ///  a case sensitive Linux file name, when the file doesn't exist an
+    ///  EFileNotFoundException will be raised
+    /// </returns>
+    function GetFullLinuxFilePath(AFile: string; IgnoreMatch: Boolean = False): string;
+    /// <summary>
+    ///  Replace all backslashes with slashes and remove all double backslashes
+    ///  from the path
+    /// </summary>
     function GetLinuxFilePath(AFile: string): string; virtual;
     procedure SetParam(Value, Default: Boolean; Name: string; AParams: TStringList); overload;
     procedure SetParam(Value, Default: string; Name: string; AParams: TStringList); overload;
@@ -161,7 +197,7 @@ type
     procedure SetPdfX(const Value: Boolean);
   protected
     function GetColorConversionStrategy: string; virtual;
-    procedure SetDefaultValues; virtual;
+    procedure SetDefaultValues; override;
   public
     /// <summary>
     ///
@@ -398,6 +434,12 @@ begin
     raise EDirectoryNotFoundException.Create('AddSourcePath: directory not found - ' + APath);
 end;
 
+constructor TGSParams.Create;
+begin
+  inherited Create;
+  SetDefaultValues;
+end;
+
 procedure TGSParams.GetDisplayFormat;
 var
   DC: HDC;
@@ -405,43 +447,55 @@ var
 begin
   FDisplayFormat := DISPLAY_COLORS_NATIVE or DISPLAY_ALPHA_NONE or
 		        DISPLAY_DEPTH_1 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST;
-  dc := GetDC(0);	//* get hdc for desktop */
-  depth := GetDeviceCaps(dc, PLANES) * GetDeviceCaps(dc, BITSPIXEL);
-  if (depth = 32) then
-  begin
-    FDisplayFormat := DISPLAY_COLORS_RGB or DISPLAY_ALPHA_NONE or
-              DISPLAY_DEPTH_8 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST;
-  end else
-  if (depth = 16) then
-  begin
-    FDisplayFormat := DISPLAY_COLORS_NATIVE or DISPLAY_ALPHA_NONE or
-              DISPLAY_DEPTH_16 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST or
-	            DISPLAY_NATIVE_555;
-  end else
-  if (depth > 8) then
-  begin
-    FDisplayFormat := DISPLAY_COLORS_RGB or DISPLAY_ALPHA_NONE or
-              DISPLAY_DEPTH_8 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST;
-  end else
-  if (depth >= 8) then
-  begin
-    FDisplayFormat := DISPLAY_COLORS_NATIVE or DISPLAY_ALPHA_NONE or
-              DISPLAY_DEPTH_8 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST;
-  end else
-  if (depth >= 4) then
-    FDisplayFormat := DISPLAY_COLORS_NATIVE or DISPLAY_ALPHA_NONE or
-              DISPLAY_DEPTH_4 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST;
-
+  DC := GetDC(0);	//* get hdc for desktop */
+  try
+    depth := GetDeviceCaps(DC, PLANES) * GetDeviceCaps(DC, BITSPIXEL);
+    if (FDDpi = 0) then
+      FDDpi := GetDeviceCaps(DC, LOGPIXELSY);
+    if (depth = 32) then
+    begin
+      FDisplayFormat := DISPLAY_COLORS_RGB or DISPLAY_UNUSED_LAST or
+                DISPLAY_DEPTH_8 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST;
+    end else
+    if (depth = 16) then
+    begin
+      FDisplayFormat := DISPLAY_COLORS_NATIVE or DISPLAY_ALPHA_NONE or
+                DISPLAY_DEPTH_16 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST or
+                DISPLAY_NATIVE_555;
+    end else
+    if (depth > 8) then
+    begin
+      FDisplayFormat := DISPLAY_COLORS_RGB or DISPLAY_ALPHA_NONE or
+                DISPLAY_DEPTH_8 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST;
+    end else
+    if (depth >= 8) then
+    begin
+      FDisplayFormat := DISPLAY_COLORS_NATIVE or DISPLAY_ALPHA_NONE or
+                DISPLAY_DEPTH_8 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST;
+    end else
+    if (depth >= 4) then
+      FDisplayFormat := DISPLAY_COLORS_NATIVE or DISPLAY_ALPHA_NONE or
+                DISPLAY_DEPTH_4 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST;
+  finally
+    DeleteDC(DC);
+  end;
 end;
 
-function TGSParams.GetFullLinuxFilePath(AFile: string): string;
+function TGSParams.GetFullLinuxFilePath(AFile: string; IgnoreMatch: Boolean): string;
+var
+  ACaseMatch: TFilenameCaseMatch;
 begin
-  Result := GetLinuxFilePath(ExpandFileName(AFile));
+  Result := ExpandFileNameCase(AFile, ACaseMatch);
+  if (ACaseMatch <> mkNone) or (IgnoreMatch) then
+    Result := GetLinuxFilePath(ExpandFileName(AFile))
+  else
+    raise EFileNotFoundException.CreateFmt('file %s not found', [AFile]);
 end;
 
 function TGSParams.GetLinuxFilePath(AFile: string): string;
 begin
-  Result := AFile.Replace('\\', '/');
+  while (Result.Contains('\\')) do
+    Result := Result.Replace('\\', '/');
   Result := Result.Replace('\', '/');
 end;
 
@@ -450,6 +504,15 @@ procedure TGSParams.SetParam(Value, Default, Name: string;
 begin
   if (Value <> Default) then
     AParams.Add(Name + Value);
+end;
+
+procedure TGSParams.SetDefaultValues;
+begin
+  FBatch := True;
+  FDDpi := 0;
+  FDisplayFormat := 0;
+  FNoPause := True;
+  FQuiet := True;
 end;
 
 procedure TGSParams.SetParam(Value, Default: Integer; Name: string;
@@ -466,6 +529,7 @@ begin
   if (LowerCase(FDevice) = DISPLAY_DEVICE_NAME) and (FDisplayFormat = 0) then
     GetDisplayFormat;
   SetParam(FDisplayFormat, 0, '-dDisplayFormat=', AParams);
+  SetParam(FDDpi, 0, '-dDisplayResolution=', AParams);
   SetParam(FQuiet, False, '-q', AParams);
   SetParam(FBatch, False, '-dBATCH', AParams);
   SetParam(FNoSaver, False, '-dNOSAVER', AParams);
@@ -513,6 +577,7 @@ end;
 
 procedure TPDFParams.SetDefaultValues;
 begin
+  inherited;
   FColorConversionStrategy := ccsNone;
   FDevice := 'pdfwrite';
   FEmbededFonts := False;
@@ -522,9 +587,6 @@ begin
   FFirstPage := -1;
   FLastPage := -1;
   FSubsetFonts := True;
-  Batch := True;
-  NoPause := True;
-  Quiet := True;
 end;
 
 procedure TPDFParams.SetParams(AParams: TStringList);

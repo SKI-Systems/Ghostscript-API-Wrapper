@@ -30,6 +30,7 @@ unit SkiSys.GS_ParameterConst;
 
 interface
 
+
 const
   // description of the parameters for ghostscript
   // https://www.ghostscript.com/doc/current/Use.htm
@@ -108,6 +109,7 @@ const
   DEBUG_VIEW_GIF = '-dVGIFDEBUG';
   //-dVJPGDEBUG	ViewJPEG
   DEBUG_VIEW_JPEG = '-dVJPGDEBUG';
+
 {$ENDREGION}
 
 implementation

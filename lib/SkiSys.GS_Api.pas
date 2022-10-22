@@ -39,11 +39,20 @@ uses
 
 {$MINENUMSIZE 4}
 
+const
+  MIN_GHOSTSCRIPT_REVISION = 9500;
+
 type
   TAnsiStringArray = array of AnsiString;
   TGSEvent_Std = procedure(const AText: String) of object;
 
+  /// <summary>
+  ///  Will be raised when an not supported Ghostscript version is used.
+  /// </summary>
+  EInvalidGhostscriptVersionException = Exception;
+
   TGS_Api = class;
+  TGS_Display = class;
 
   /// <summary>
   ///  Thread to run InitWithArgs as a thread with the arguments
@@ -62,40 +71,37 @@ type
   ///  Image record to store the image info
   /// </summary>
   TGS_ImageData = record
+    ByteWidth: Integer;
     Device: Pointer;
-    Raster: Integer;
     Format: Cardinal;
+    Height: Integer;
     /// <summary>
-    ///  Image data buffer
+    ///  Pointer to the image data buffer
     /// </summary>
     ImageData: PByte;
-    Height: Integer;
+    Raster: Integer;
     Width: Integer;
-    ByteWidth: Integer;
     procedure SetDataAndSize(Width, Height, Raster: Integer; Format: Cardinal;
                              PImage: PByte);
   end;
-
-  TGS_Display = class;
 
   TGS_Image = class(Vcl.Graphics.TBitmap)
   private
     [WEAK]FDisplay: TGS_Display;
     FBmpInfoHeader: BITMAPINFOHEADER;
+    FByteWidth: Integer;
     FGS_Device: Pointer;
     FGS_Format: Cardinal;
-    FGS_ImageData: PByte; //Pointer to the Data, will be filled after OnSync/OnPage
     FGS_ImageDataLoaded: Boolean;
     FGS_Raster: Integer;
-    //FByteWidth: Integer;
   protected
+    /// <summary>
+    ///  Get the PixelFormat from the BITMAPINFOHEADER
+    /// </summary>
+    function GetPixelFormatFromBMIH: TPixelFormat;
     procedure SetBmpInfoHeader(AWidth, AHeight: Integer);
     procedure SetImageData(PImage: PByte);
     property BmpInfoHeader: BITMAPINFOHEADER read FBmpInfoHeader write FBmpInfoHeader;
-    /// <summary>
-    ///  Pointer to the image data buffer
-    /// </summary>
-    property ImageData: PByte read FGS_ImageData;
   public
     constructor Create(ADisplays: TGS_Display; AWidth, AHeight, ARaster: Integer;
                        AFormat: Cardinal; PImage: PByte); reintroduce; overload;
@@ -326,15 +332,25 @@ type
     Revision: LongInt;
     RevisionStr: string;
     RevisionDate: LongInt;
+    /// <summary>
+    ///  Fills the RevisionStr after GetRevision is called
+    /// </summary>
+    function GetRevisonStr: string; virtual;
   public (*** PUBLIC METHODS ***)
     /// <summary>
     ///  create the object and read the revision data from the dll
     /// </summary>
     constructor Create(AApi: TGS_API); overload;
     /// <summary>
+    ///  Check the revision and return a warning on StdOut, when a higher version
+    ///  is used. When the minimum supported version of Ghostscript is used, then
+    ///  raise an EInvalidGhostscriptVersion
+    /// </summary>
+    procedure CheckRevision; virtual;
+    /// <summary>
     ///  Read the revision data from the dll and fill the fields
     /// </summary>
-    procedure GetRevision(AApi: TGS_API);
+    procedure GetRevision(AApi: TGS_API); virtual;
   end;
 
   /// <summary>
@@ -346,24 +362,25 @@ type
     FDebug: Boolean;
     FDebugParams: TGSDebugParams;
     FDllPath: string;
+    FArgumentEncoding: GS_ARG_ENCODING;
     FEventAfterExecute: TNotifyEvent;
     FEventStdError: TGSEvent_Std;
     FEventStdIn: TGSEvent_Std;
     FEventStdOut: TGSEvent_Std;
     FInitWithArgs: Boolean;
-    FInstance: Pointer;
+    FInstance: Pointer; // ghostscript instance pointer
     FLastError: string;
     FLastErrors: TStringList; // list of errors occured during the process
     FLastErrorCode: Integer;
     FThreadRunning: Boolean;
     FThreadUsed: Boolean;
     function GetLastErrors: string;
+    function GetLogStdOut: TStrings;
     /// <summary>
     ///  Register all callouts to communicate with the Ghostscript library
     /// </summary>
     procedure SetCallouts;
     procedure SetLastErrorInternal(AText: string; AErrorCode: Integer = -1);
-    function GetLogStdOut: TStrings;
   protected
     FLogStdIn: TStringList;  // log StdIn
     FLogStdOut: TStringList; // log StdOut
@@ -443,6 +460,11 @@ type
     /// </summary>
     GSDisplay: TGS_Display;
     /// <summary>
+    ///
+    /// </summary>
+    property ArgumentEncoding: GS_ARG_ENCODING read FArgumentEncoding
+                                               write FArgumentEncoding;
+    /// <summary>
     ///  Set Debug to True to get extended informations about which Params will be
     ///  set for the convert operation
     /// </summary>
@@ -452,7 +474,7 @@ type
     /// </summary>
     property DebugParams: TGSDebugParams read FDebugParams write FDebugParams;
     /// <summary>
-    ///  The LastError
+    ///  returns LastError from the API or Ghostscript
     /// </summary>
     property LastError: string read FLastError;
     /// <summary>
@@ -511,6 +533,8 @@ type
   end;
 
 implementation
+
+uses Clipbrd;
 
 {$REGION 'Callback Functions'}
 
@@ -831,7 +855,7 @@ begin
       // create a new instance, if gsapi_init_with_args was used before
       // to prevent a fatal error from ghostscript at the 2nd try
       InitGSInstance;
-      gsapi_set_arg_encoding(FInstance, Integer(GS_ARG_ENCODING_UTF8));
+      gsapi_set_arg_encoding(FInstance, Integer(FArgumentEncoding));
       FLastErrorCode := gsapi_init_with_args(FInstance, High(AArgs) + 1, AArgs);
     except
       on E: Exception do
@@ -851,6 +875,7 @@ function TGS_Api.InitWithArgs(AStrings: TStrings): Boolean;
 var
   AAnsiStrs: TAnsiStringArray;
   AArgs: PArgv;
+  ACmdArgs: string;
   i: Integer;
 begin
   Result := False;
@@ -859,10 +884,18 @@ begin
     begin
       if (Debug) then
       begin
+        ACmdArgs := GS_EXE;
         StdOut('---  Debug Init Parameters  ---' + #13#10);
         for i := 0 to AStrings.Count - 1 do
+        begin
           StdOut('SetParam: ' + AStrings[i] + #13#10);
-        StdOut('---  end  ---' + #13#10);
+          ACmdArgs := ACmdArgs + ' ' + AStrings[i];
+        end;
+        StdOut('--- END ---' + #13#10);
+        StdOut('--- CMD Args ---' + #13#10);
+        //TODO: Some output might be corrupted, because of whitespaces
+        StdOut(ACmdArgs + #13#10);
+        StdOut('--- CMD Args END ---' + #13#10);
       end;
 
       AAnsiStrs := GetAnsiStrArray(AStrings);
@@ -892,6 +925,7 @@ begin
   FInstance := nil;
   FLastError := '';
   FLastErrorCode := 0;
+  FArgumentEncoding := GS_ARG_ENCODING_UTF8;
 end;
 
 procedure TGS_Api.SetLastError(AText: string; AErrorCode: Integer = -1);
@@ -983,6 +1017,13 @@ end;
 
 {$REGION 'TGS_Revision' }
 
+procedure TGS_Revision.CheckRevision;
+begin
+  if (Revision < MIN_GHOSTSCRIPT_REVISION) then
+    raise EInvalidGhostscriptVersionException.Create(
+      'This Ghostscript version is not supported by the API');
+end;
+
 constructor TGS_Revision.Create(AApi: TGS_API);
 begin
   FApi := AApi;
@@ -991,7 +1032,7 @@ end;
 
 procedure TGS_Revision.GetRevision(AApi: TGS_API);
 var
-  AError, AStr: string;
+  AError: string;
   ARevision: gsapi_revision_t;
 begin
   try
@@ -1001,19 +1042,32 @@ begin
       Self.Product := string(AnsiString(ARevision.product));
       Self.Copyright := string(AnsiString(ARevision.copyright));
       Self.Revision := ARevision.revision;
-      AStr := IntToStr(ARevision.revision);
-      Self.RevisionStr := Format('%s.%s.%s', [AStr[1], copy(AStr, 2, 2),
-                                                       copy(AStr, 4, Length(AStr))]);
+      Self.RevisionStr := GetRevisonStr;
       Self.RevisionDate := ARevision.revisiondate;
+      CheckRevision;
     end;
   except
     on E: Exception do
     begin
       AError := 'Error on TGS_Revision.GetRevision: ' + E.Message;
       AApi.SetLastError(AError);
-      raise Exception.Create(AError);
+      E.RaiseOuterException(Exception.Create(AError));
     end;
   end;
+end;
+
+function TGS_Revision.GetRevisonStr: string;
+var
+  AStr: string;
+  ARevisionMajorLen: Integer;
+begin
+  ARevisionMajorLen := 1;
+  if (Revision >= 10000) then
+    inc(ARevisionMajorLen);
+  AStr := IntToStr(Revision);
+  Result := Format('%s.%s.%s', [copy(AStr, 1, ARevisionMajorLen),     //revsion major
+                                copy(AStr, ARevisionMajorLen + 1, 2), //revision minor
+                                copy(AStr, ARevisionMajorLen + 3, Length(AStr))]);
 end;
 
 {$ENDREGION}
@@ -1137,7 +1191,7 @@ end;
 
 function TGS_Display.EventPreclose(ADevice: Pointer): Integer;
 begin
-  DebugLog('TGSDisplays.EventPreclose');
+  DebugLogFmt('TGSDisplays.EventPreclose: device=%d', [UInt(ADevice)]);
   if (Assigned(FEventPreClose)) then
     Result := FEventPreClose(ADevice)
   else
@@ -1187,7 +1241,7 @@ end;
 function TGS_Display.EventSize(ADevice: Pointer;
   AWidth, AHeight, ARaster: Integer; AFormat: Cardinal; PImage: PByte): Integer;
 const
-  DebugMsg = 'TGSDisplays.EventSize: device=%d width=%d height=%d' +
+  DebugMsg = 'TGSDisplays.EventSize: device=%d width=%d height=%d ' +
                                     'raster=%d format=%d pimage=%d';
 begin
   DebugLogFmt(DebugMsg, [UInt(ADevice), AWidth, AHeight, ARaster, AFormat,
@@ -1300,9 +1354,24 @@ begin
   SetImageData(AData.ImageData);
 end;
 
+function TGS_Image.GetPixelFormatFromBMIH: TPixelFormat;
+begin
+  case (FBmpInfoHeader.biBitCount) of
+    1: Result := pf1bit;
+    4: Result := pf4bit;
+    8: Result := pf8bit;
+    15: Result := pf15bit;
+    16: Result := pf16bit;
+    24: Result := pf24bit;
+    32: Result := pf32bit;
+    else
+      Result := pfDevice;
+  end;
+end;
+
 procedure TGS_Image.SetBmpInfoHeader(AWidth, AHeight: Integer);
 begin
-  FBmpInfoHeader.biSize := SizeOf(FBmpInfoHeader);
+  FBmpInfoHeader.biSize := SizeOf(BmpInfoHeader);
   FBmpInfoHeader.biHeight := AHeight;
   FBmpInfoHeader.biWidth := AWidth;
 
@@ -1364,9 +1433,9 @@ begin
           FBmpInfoHeader.biClrUsed := 256;
           FBmpInfoHeader.biClrImportant := 256;
         end;
-        else exit;
+        else exit; //TODO: raise an error
     end;
-    Integer(DISPLAY_COLORS_RGB):
+    DISPLAY_COLORS_RGB:
     begin
       if (FGS_Format and DISPLAY_DEPTH_MASK) <> DISPLAY_DEPTH_8 then
         exit;
@@ -1388,26 +1457,57 @@ begin
       FBmpInfoHeader.biBitCount := 24;
       FBmpInfoHeader.biClrUsed := 0;
       FBmpInfoHeader.biClrImportant := 0;
+      //TODO: covert it ->dwing.c
+    end;
+    DISPLAY_COLORS_SEPARATION:
+    begin
+      FBmpInfoHeader.biBitCount := 24;
+      FBmpInfoHeader.biClrUsed := 0;
+      FBmpInfoHeader.biClrImportant := 0;
     end;
   end;
   FBmpInfoHeader.biCompression := 0;
   FBmpInfoHeader.biSizeImage := 0;
   FBmpInfoHeader.biXPelsPerMeter := 0;
   FBmpInfoHeader.biYPelsPerMeter := 0;
-  //FByteWidth := trunc(((FBmpInfoHeader.biWidth * FBmpInfoHeader.biBitCount + 31 ) and (65504)) / 8);
+  FByteWidth := trunc(((FBmpInfoHeader.biWidth * FBmpInfoHeader.biBitCount + 31) and (65504)) / 8);
 end;
 
 procedure TGS_Image.SetImageData(PImage: PByte);
 var
   ABmpInfo: BITMAPINFO;
+  DestBytes: PByte;
+  i, AByteWidth, Row: Integer;
 begin
   if (Assigned(PImage)) then
   begin
-    Self.Width := FBmpInfoHeader.biWidth;
-    Self.Height := FBmpInfoHeader.biHeight;
-    ABmpInfo.bmiHeader := FBmpInfoHeader;
-    FGS_ImageDataLoaded := (SetDIBits(0, Self.Handle, 0, FBmpInfoHeader.biHeight,
-                                      PImage, ABmpInfo, DIB_RGB_COLORS)) > 0;
+    // initialize the size of the image
+    SetSize(FBmpInfoHeader.biWidth, FBmpInfoHeader.biHeight);
+    // only use the raster when the calculated ByteWidth is different
+    if (FGS_Raster <> FByteWidth) then
+    begin
+      // get the PixelFormat from the BITMAPINFOHEADER
+      PixelFormat := GetPixelFormatFromBMIH;
+      // we have to use the raster to get the correct length of a line
+      AByteWidth := FGS_Raster;
+      for i := 0 to FBmpInfoHeader.biHeight - 1 do
+      begin
+        // get the pointer to the image data of the bitmap line
+        DestBytes := Scanline[i];
+        // In Windows we will paint the image bottom first, so we need to start
+        // at the last row and end at the first row
+        Row := FBmpInfoHeader.biHeight - 1 - i;
+        // copy the image memory to the bitmap memory
+        CopyMemory(DestBytes, PImage + AByteWidth * Row, AByteWidth);
+        // convert if needed
+        //TODO: implement convert functions
+      end;
+    end else
+    begin
+      ABmpInfo.bmiHeader := FBmpInfoHeader;
+      FGS_ImageDataLoaded := (SetDIBits(0, Handle, 0, Abs(FBmpInfoHeader.biHeight),
+                                        PImage, ABmpInfo, DIB_RGB_COLORS)) > 0;
+    end;
   end;
 end;
 
