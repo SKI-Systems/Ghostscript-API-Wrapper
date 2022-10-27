@@ -3,7 +3,7 @@
 {       Ghostscript API Wrapper: An extended Ghostscript API for Delphi        }
 {       to simplify use of Ghostscript.                                        }
 {                                                                              }
-{       Copyright (c) 2021-2022 (Ski-Systems)                                  }
+{       Copyright (c) 2021-2022 (SKI-Systems)                                  }
 {       Author: Jan Blumstengel                                                }
 {                                                                              }
 {       https://github.com/SKI-Systems/Ghostscript-API-Wrapper                 }

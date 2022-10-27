@@ -248,6 +248,9 @@ begin
 
     // shows the parameters and other informations in the OnStdOut
     PDFConvert.Debug := True;
+    // shows the used parameters as cmd args
+    // the output is without "" you have to fix this by your self
+    PDFConvert.DebugShowCmdArgs := True;
     // shows the communictaion of Ghosscript with API, if you use
     // PDFConvert.Params.Device = 'display';
     PDFConvert.GSDisplay.Debug := True;
@@ -256,6 +259,7 @@ begin
     PDFConvert.DebugParams.DebugParams :=
       [dparCompiledFonts, dparCffFonts,
       dparCIEColor, dparFontApi, dparTTFFonts, dparInitialization];
+
 {$ENDIF}
     // set a title for the PDF-File
     // when a Title allready exists this param will be ignored

@@ -3,7 +3,7 @@
 {       Ghostscript API Wrapper: An extended Ghostscript API for Delphi        }
 {       to simplify use of Ghostscript.                                        }
 {                                                                              }
-{       Copyright (c) 2021-2022 (Ski-Systems)                                  }
+{       Copyright (c) 2021-2022 (SKI-Systems)                                  }
 {       Author: Jan Blumstengel                                                }
 {                                                                              }
 {       https://github.com/SKI-Systems/Ghostscript-API-Wrapper                 }
@@ -31,11 +31,24 @@
 /// </summary>
 unit SkiSys.GS_ParameterTypes;
 
+{$IFDEF FPC}
+  {$MODE DELPHI}
+  {$H+}
+{$ELSE} //Delphi
+  {$DEFINE DELPHI}
+{$ENDIF}
+
 interface
 
 uses
-  SkiSys.GS_ParameterConst, SkiSys.GS_gdevdsp,
-  System.Classes, System.SysUtils, WinApi.Windows, Vcl.Graphics;
+  SkiSys.GS_ParameterConst, SkiSys.GS_gdevdsp
+  {$IFDEF DELPHI}
+    , System.Classes, System.SysUtils, WinApi.Windows, Vcl.Graphics
+  {$ENDIF}
+  {$IFDEF FPC}
+    , Classes, SysUtils, Windows, Graphics
+  {$ENDIF}
+    ;
 
 type
   /// <summary>
@@ -494,6 +507,7 @@ end;
 
 function TGSParams.GetLinuxFilePath(AFile: string): string;
 begin
+  Result := AFile;
   while (Result.Contains('\\')) do
     Result := Result.Replace('\\', '/');
   Result := Result.Replace('\', '/');
@@ -643,12 +657,17 @@ begin
 end;
 
 procedure TPDFAXParams.SetICCProfile(const Value: string);
+const
+  Msg = 'SetICCProfile: file %s does not exist; expanded file: %s';
+var
+  AFile: string;
 begin
   if (Value <> '') then
   begin
-    if (not FileExists(Value)) then
-      raise EFileNotFoundException.CreateFmt('SetICCProfile: file %s does not exist', [Value]);
-    FICCProfile := GetFullLinuxFilePath(Value);
+    AFile := ExpandFileName(Value);
+    if (not FileExists(AFile)) then
+      raise EFileNotFoundException.CreateFmt(Msg, [Value, AFile]);
+    FICCProfile := GetFullLinuxFilePath(AFile);
   end else
     FICCProfile := Value;
 end;

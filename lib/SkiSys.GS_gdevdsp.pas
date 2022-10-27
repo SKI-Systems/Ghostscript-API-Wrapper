@@ -3,7 +3,7 @@
 {       Ghostscript API Wrapper: An extended Ghostscript API for Delphi        }
 {       to simplify use of Ghostscript.                                        }
 {                                                                              }
-{       Copyright (c) 2021-2022 (Ski-Systems)                                  }
+{       Copyright (c) 2021-2022 (SKI-Systems)                                  }
 {       Author: Jan Blumstengel                                                }
 {                                                                              }
 {       https://github.com/SKI-Systems/Ghostscript-API-Wrapper                 }
@@ -27,11 +27,23 @@
 
 // Wrapper unit for gdevdsp.h from Ghostscript
 unit SkiSys.GS_gdevdsp;
+{$IFDEF FPC}
+  {$MODE DELPHI}
+  {$H+}
+{$ELSE} //Delphi
+  {$DEFINE DELPHI}
+{$ENDIF}
 
 interface
 
 uses
-  System.Classes, System.SysUtils, WinApi.Windows;
+  {$IFDEF DELPHI}
+    System.Classes, System.SysUtils, WinApi.Windows
+  {$ENDIF}
+  {$IFDEF FPC}
+    Classes, SysUtils, Windows
+  {$ENDIF}
+    ;
 
   {$MINENUMSIZE 4}
 
@@ -375,7 +387,7 @@ type
      *)
     display_adjust_band_height: TDisplayAdjustBandHeightEvent;
 
-    (* Ask the callback for a rectangle to render (and a block to render
+    {* Ask the callback for a rectangle to render (and a block to render
      * it in). Each subsequent call tells the caller that any previous
      * call has finished. To signal 'no more rectangles' return with
      * *w or *h = 0.
@@ -392,7 +404,7 @@ type
      *   component 1 of Pixel(*ox,*oy), if in planar mode, 0 otherwise.
      *   *x, *y, *w, *h = rectangle requested within that memory block.
      *
-     *)
+     *}
     display_rectangle_request: TDisplayRectangleRequestEvent;
   end;
 
@@ -405,6 +417,7 @@ type
 
 
 (* This is the V2 structure, before banding and planar support was added *)
+
 //struct display_callback_v2_s {
 //    int size; /* sizeof(struct display_callback_v2) */
 //    int version_major; /* DISPLAY_VERSION_MAJOR_V2 */
@@ -430,25 +443,25 @@ type
 
 
 (* This is the V1 structure, before separation format was added *)
-(*
-struct display_callback_v1_s {
-    int size; // sizeof(struct display_callback_v1)
-    int version_major; // DISPLAY_VERSION_MAJOR_V1
-    int version_minor; // DISPLAY_VERSION_MINOR_V1
-    int (*display_open)(void *handle, void *device);
-    int (*display_preclose)(void *handle, void *device);
-    int (*display_close)(void *handle, void *device);
-    int (*display_presize)(void *handle, void *device,
-        int width, int height, int raster, unsigned int format);
-    int (*display_size)(void *handle, void *device, int width, int height,
-        int raster, unsigned int format, unsigned char *pimage);
-    int (*display_sync)(void *handle, void *device);
-    int (*display_page)(void *handle, void *device, int copies, int flush);
-    int (*display_update)(void *handle, void *device, int x, int y,
-        int w, int h);
-    void (**display_memalloc)(void *handle, void *device, unsigned long size);
-    int (**display_memfree)(void *handle, void *device, void *mem);
-};*)
+
+//struct display_callback_v1_s {
+//    int size; // sizeof(struct display_callback_v1)
+//    int version_major; // DISPLAY_VERSION_MAJOR_V1
+//    int version_minor; // DISPLAY_VERSION_MINOR_V1
+//    int (*display_open)(void *handle, void *device);
+//    int (*display_preclose)(void *handle, void *device);
+//    int (*display_close)(void *handle, void *device);
+//    int (*display_presize)(void *handle, void *device,
+//        int width, int height, int raster, unsigned int format);
+//    int (*display_size)(void *handle, void *device, int width, int height,
+//        int raster, unsigned int format, unsigned char *pimage);
+//    int (*display_sync)(void *handle, void *device);
+//    int (*display_page)(void *handle, void *device, int copies, int flush);
+//    int (*display_update)(void *handle, void *device, int x, int y,
+//        int w, int h);
+//    void (**display_memalloc)(void *handle, void *device, unsigned long size);
+//    int (**display_memfree)(void *handle, void *device, void *mem);
+//};
 
 //#define DISPLAY_CALLBACK_V1_SIZEOF sizeof(struct display_callback_v1_s)
 

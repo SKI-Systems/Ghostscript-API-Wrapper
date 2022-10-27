@@ -24,10 +24,8 @@ object FMain: TFMain
     ActivePage = Tab_Operation
     Align = alClient
     TabOrder = 0
-    ExplicitWidth = 753
     object Tab_Operation: TTabSheet
       Caption = 'Convert'
-      ExplicitWidth = 745
       DesignSize = (
         752
         592)
@@ -72,7 +70,6 @@ object FMain: TFMain
         ScrollBars = ssVertical
         ShowHint = True
         TabOrder = 2
-        ExplicitWidth = 737
       end
       object M_Output: TMemo
         Left = 8
@@ -86,7 +83,6 @@ object FMain: TFMain
         ScrollBars = ssVertical
         ShowHint = True
         TabOrder = 3
-        ExplicitWidth = 737
       end
       object M_Errors: TMemo
         Left = 8
@@ -100,7 +96,6 @@ object FMain: TFMain
         ScrollBars = ssVertical
         ShowHint = True
         TabOrder = 4
-        ExplicitWidth = 737
       end
       object RGrp_Devices: TRadioGroup
         Left = 89
@@ -122,6 +117,10 @@ object FMain: TFMain
     object Tab_PDFView: TTabSheet
       Caption = 'PDF Preview'
       ImageIndex = 1
+      ExplicitLeft = 0
+      ExplicitTop = 0
+      ExplicitWidth = 0
+      ExplicitHeight = 0
       object P_PDF_Top: TPanel
         Left = 0
         Top = 0

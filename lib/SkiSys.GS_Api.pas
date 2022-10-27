@@ -3,7 +3,7 @@
 {       Ghostscript API Wrapper: An extended Ghostscript API for Delphi        }
 {       to simplify use of Ghostscript.                                        }
 {                                                                              }
-{       Copyright (c) 2021-2022 (Ski-Systems)                                  }
+{       Copyright (c) 2021-2022 (SKI-Systems)                                  }
 {       Author: Jan Blumstengel                                                }
 {                                                                              }
 {       https://github.com/SKI-Systems/Ghostscript-API-Wrapper                 }
@@ -28,26 +28,46 @@
 // Main unit to implement the Wrapper units in delphi classes
 unit SkiSys.GS_Api;
 
+{$IFDEF FPC} //Free Pascal
+  {$MODE DELPHI}
+  {$H+}
+{$ELSE} //Delphi
+  {$DEFINE DELPHI}
+{$ENDIF}
+
 interface
 
 uses
   SkiSys.GS_Dll, SkiSys.GS_Types, SkiSys.GS_Errors, SkiSys.GS_ParameterTypes,
   SkiSys.GS_gdevdsp,
 
+{$IFDEF FPC}
+  Classes, SysUtils, Windows, Generics.Collections, Graphics;
+{$ELSE}
+  {$IFDEF DELPHI}
   System.Classes, System.SysUtils, WinApi.Windows, System.AnsiStrings,
   System.Generics.Collections, Vcl.Graphics;
+  {$ENDIF}
+{$ENDIF}
 
 {$MINENUMSIZE 4}
 
 const
+  API_VERSION = 1001;
+  /// <summary>
+  ///  Minimum required Ghostscript version, which will be checked in
+  ///  TGS_Revision.CheckRevision
+  /// </summary>
   MIN_GHOSTSCRIPT_REVISION = 9500;
+
 
 type
   TAnsiStringArray = array of AnsiString;
   TGSEvent_Std = procedure(const AText: String) of object;
+  TNotifyFuncEvent = function(Sender: TObject): Integer of object;
 
   /// <summary>
-  ///  Will be raised when an not supported Ghostscript version is used.
+  ///  Will be raised when a not supported Ghostscript version is used.
   /// </summary>
   EInvalidGhostscriptVersionException = Exception;
 
@@ -60,7 +80,7 @@ type
   TGS_ApiThread = class(TThread)
   private
     FArgs: TStrings;
-    [WEAK]FApi: TGS_Api;
+    {$IFDEF DELPHI}[WEAK]{$ENDIF}FApi: TGS_Api;
   protected
     procedure Execute; override;
   public
@@ -71,23 +91,23 @@ type
   ///  Image record to store the image info
   /// </summary>
   TGS_ImageData = record
-    ByteWidth: Integer;
-    Device: Pointer;
-    Format: Cardinal;
-    Height: Integer;
+    ByteWidth: Integer; //calculated byte width
+    Device: Pointer; //Ghostscript device pointer
+    Format: Cardinal; //display format
+    Height: Integer; //image height
     /// <summary>
     ///  Pointer to the image data buffer
     /// </summary>
     ImageData: PByte;
-    Raster: Integer;
-    Width: Integer;
+    Raster: Integer; //Ghostscript bytes per image line
+    Width: Integer; //image width
     procedure SetDataAndSize(Width, Height, Raster: Integer; Format: Cardinal;
                              PImage: PByte);
   end;
 
-  TGS_Image = class(Vcl.Graphics.TBitmap)
+  TGS_Image = class(TBitmap)
   private
-    [WEAK]FDisplay: TGS_Display;
+    {$IFDEF DELPHI}[WEAK]{$ENDIF}FDisplay: TGS_Display;
     FBmpInfoHeader: BITMAPINFOHEADER;
     FByteWidth: Integer;
     FGS_Device: Pointer;
@@ -96,20 +116,45 @@ type
     FGS_Raster: Integer;
   protected
     /// <summary>
+    ///  Converts the image data if needed
+    /// </summary>
+    procedure ConvertImageDataLine(ADataLine: Pointer); virtual;
+    /// <summary>
     ///  Get the PixelFormat from the BITMAPINFOHEADER
     /// </summary>
-    function GetPixelFormatFromBMIH: TPixelFormat;
-    procedure SetBmpInfoHeader(AWidth, AHeight: Integer);
-    procedure SetImageData(PImage: PByte);
+    function GetPixelFormatFromBMIH: TPixelFormat; virtual;
+    /// <summary>
+    ///  Set the BmpInfoHeader from the format
+    /// </summary>
+    procedure SetBmpInfoHeader(AWidth, AHeight: Integer); virtual;
+    /// <summary>
+    ///  Set the image in the bitmap
+    /// </summary>
+    procedure SetImageData(PImage: PByte); virtual;
+    /// <summary>
+    ///  The BmpInfoHeader
+    /// </summary>
     property BmpInfoHeader: BITMAPINFOHEADER read FBmpInfoHeader write FBmpInfoHeader;
   public
     constructor Create(ADisplays: TGS_Display; AWidth, AHeight, ARaster: Integer;
                        AFormat: Cardinal; PImage: PByte); reintroduce; overload;
     constructor Create(ADisplays: TGS_Display; AData: TGS_ImageData); reintroduce; overload;
   public (*** PROPERTIES ***)
+    /// <summary>
+    ///  Pointer to the Ghostscript display device
+    /// </summary>
     property GS_Device: Pointer read FGS_Device;
+    /// <summary>
+    ///  The Ghostscript display format implemented in the unit SkiSys.GS_gdevdsp
+    /// </summary>
     property GS_Format: Cardinal read FGS_Format;
+    /// <summary>
+    ///  Is the image buffer loaded into the bitmap
+    /// </summary>
     property GS_ImageDataLoaded: Boolean read FGS_ImageDataLoaded;
+    /// <summary>
+    ///  The raster of the bitmap (bytes per image line)
+    /// </summary>
     property GS_Raster: Integer read FGS_Raster;
   end;
 
@@ -162,7 +207,7 @@ type
   /// </summary>
   TGS_Display = class
   private
-    [WEAK]FApi: TGS_Api;
+    {$IFDEF DELPHI}[WEAK]{$ENDIF}FApi: TGS_Api;
     FCallback: display_callback;
     FDebug: Boolean;
     FEventAdjustBandHeight: TGS_DisplayAdjustBandHeightEvent;
@@ -274,7 +319,6 @@ type
     /// <summary>
     ///  Device is about to be resized.
     ///  Resize will only occur if this function returns 0.
-    ///
     /// </summary>
     /// <param name="ARaster">ARaster is byte count of a row.</param>
     property OnPresize: TGS_DisplayPresizeEvent read FEventPresize write FEventPresize;
@@ -325,7 +369,7 @@ type
   /// </summary>
   TGS_Revision = class
   private
-    [WEAK]FApi: TGS_API;
+    {$IFDEF DELPHI}[WEAK]{$ENDIF}FApi: TGS_API;
   public
     Product: string;
     Copyright: string;
@@ -344,7 +388,8 @@ type
     /// <summary>
     ///  Check the revision and return a warning on StdOut, when a higher version
     ///  is used. When the minimum supported version of Ghostscript is used, then
-    ///  raise an EInvalidGhostscriptVersion
+    ///  raise an EInvalidGhostscriptVersion.
+    ///  You can deactivate the check with the compiler switch DONT_CHECK_GS_REVISION
     /// </summary>
     procedure CheckRevision; virtual;
     /// <summary>
@@ -358,32 +403,73 @@ type
   /// </summary>
   TGS_Api = class(TObject)
   private
-    FRevision: TGS_Revision;
+    FArgumentEncoding: GS_ARG_ENCODING;
     FDebug: Boolean;
     FDebugParams: TGSDebugParams;
+    FDebugShowCmdArgs: Boolean;
+    FDefaultDeviceList: TStringList;
     FDllPath: string;
-    FArgumentEncoding: GS_ARG_ENCODING;
     FEventAfterExecute: TNotifyEvent;
+    FEventAfterInitWithArgs: TNotifyEvent;
+    FEventPoll: TNotifyFuncEvent;
     FEventStdError: TGSEvent_Std;
     FEventStdIn: TGSEvent_Std;
     FEventStdOut: TGSEvent_Std;
+    FExit: Boolean; // was gsapi_exit allready called
     FInitWithArgs: Boolean;
     FInstance: Pointer; // ghostscript instance pointer
     FLastError: string;
     FLastErrors: TStringList; // list of errors occured during the process
     FLastErrorCode: Integer;
+    FNoExit: Boolean;
+    FRevision: TGS_Revision;
     FThreadRunning: Boolean;
     FThreadUsed: Boolean;
+    function GetDefaultDeviceList: TStrings;
     function GetLastErrors: string;
+    function GetLogStdIn: TStrings;
     function GetLogStdOut: TStrings;
     /// <summary>
     ///  Register all callouts to communicate with the Ghostscript library
     /// </summary>
     procedure SetCallouts;
+    procedure SetDefaultDeviceList(ADeviceList: TStrings);
+    /// <summary>
+    ///  Set FLastErrorCode and the internal Log. (Will not call OnStdError)
+    /// </summary>
     procedure SetLastErrorInternal(AText: string; AErrorCode: Integer = -1);
   protected
     FLogStdIn: TStringList;  // log StdIn
     FLogStdOut: TStringList; // log StdOut
+    /// <summary>
+    ///  Call event OnAfterExecute
+    /// </summary>
+    procedure AfterExecute; virtual;
+    /// <summary>
+    ///  Call event OnAfterInitWithArgs
+    /// </summary>
+    procedure AfterInitWithArgs; virtual;
+    /// <summary>
+    ///  Check if run_string* operations can be executed
+    /// </summary>
+    function CheckRunString: Boolean; virtual;
+    /// <summary>
+    ///  Check if a gsapi_* method returns gs_error_Quit, if yes gsapi_exit
+    ///  will be called
+    /// </summary>
+    function CheckResult(AResult: Integer): Integer; virtual;
+    /// <summary>
+    ///  This function make sure that gsapi_exit is called at the right time
+    ///  to avoid errors.
+    /// </summary>
+    /// <remarks>
+    ///  The gsapi_run_* functions are like gs_main_run_* except that the
+    ///  error_object is omitted. If these functions return (smaller)= -100, either quit
+    ///  or a fatal error has occured. You must call gsapi_exit() next.
+    ///  The only exception is gsapi_run_string_continue() which will
+    ///  return gs_error_NeedInput if all is well. See below for return codes.
+    /// </remarks>
+    function CheckRunResult(AResult: Integer): Integer; virtual;
     /// <summary>
     ///  Clear the internal log vars
     /// </summary>
@@ -399,7 +485,7 @@ type
     /// <summary>
     ///  Convert a TStrings object to a TAnsiStringArray
     /// </summary>
-    function GetAnsiStrArray(AStrings: TStrings): TAnsiStringArray; virtual;
+    function GetAnsiStrArray(AStrings: TStrings): TAnsiStringArray; overload; virtual;
     /// <summary>
     ///  Convert a TAnsiStringArray to a PArgv Pointer
     /// </summary>
@@ -409,8 +495,8 @@ type
     /// </summary>
     procedure Init(ADllPath: string); virtual;
     /// <summary>
-    ///  Get a new Instance Pointer for API calls, it has to be called everytime if
-    ///  you want to use InitWithArgs again. (To avoid an fatal error from gsapi at 2nd call)
+    ///  Get a new Instance Pointer for API calls. This method has to be called
+    ///  everytime before InitWithArgs.(To avoid an fatal error from gsapi at 2nd call)
     /// </summary>
     procedure InitGSInstance; virtual;
     /// <summary>
@@ -418,21 +504,30 @@ type
     /// </summary>
     procedure InitInternalLog; virtual;
     /// <summary>
-    ///  Main methode of Ghostscript lirary to execute commands using pointers
+    ///  Main method of Ghostscript lirary to execute commands using pointers
     /// </summary>
     function InitWithArgs(AArgs: PArgv): Boolean; overload; virtual;
+    /// <summary>
+    ///  The callback function for polling. See full description at the event
+    ///  <see cref="OnPoll"/>
+    /// </summary>
+    function Poll: Integer; virtual;
     /// <summary>
     ///  Set the default values of the class
     /// </summary>
     procedure SetDefaultValues; virtual;
     /// <summary>
-    ///  Set the last error from the API and the Ghostscript lirary
+    ///  Set the last error from the API and the Ghostscript library
     /// </summary>
-    procedure SetLastError(AText: string; AErrorCode: Integer = -1); virtual;
+    procedure SetLastError(AText: string; AErrorCode: Integer = -1); overload; virtual;
     /// <summary>
-    ///  Set the last error code from the API aund the Ghostscript lirary
+    ///  Set the last error from the API and the Ghostscript library
     /// </summary>
-    procedure SetLastErrorCode(ACode: gs_error_type);
+    procedure SetLastError(AText: string; AErrorCode: gs_error_type); overload; virtual;
+    /// <summary>
+    ///  Set the last error code from the API and the Ghostscript library
+    /// </summary>
+    procedure SetLastErrorCode(ACode: gs_error_type); virtual;
     /// <summary>
     ///  Set parameters for the InitWithArgs procedure
     /// </summary>
@@ -450,6 +545,10 @@ type
     /// </summary>
     procedure StdOut(AText: string); virtual;
     /// <summary>
+    ///  Calls StdOut method with a linebreak at the end
+    /// </summary>
+    procedure StdOutLine(AText: string); virtual;
+    /// <summary>
     ///  Will be called after InitWithArgs and InitWithArgsStart was executed
     /// </summary>
     procedure ThreadFinished(Sender: TObject); virtual;
@@ -460,13 +559,13 @@ type
     /// </summary>
     GSDisplay: TGS_Display;
     /// <summary>
-    ///
+    ///  Set the argument encoding for Ghostscript
     /// </summary>
     property ArgumentEncoding: GS_ARG_ENCODING read FArgumentEncoding
                                                write FArgumentEncoding;
     /// <summary>
     ///  Set Debug to True to get extended informations about which Params will be
-    ///  set for the convert operation
+    ///  set for convert operations and other details
     /// </summary>
     property Debug: Boolean read FDebug write FDebug;
     /// <summary>
@@ -474,22 +573,64 @@ type
     /// </summary>
     property DebugParams: TGSDebugParams read FDebugParams write FDebugParams;
     /// <summary>
+    ///  Show the command line args in StdOut
+    /// </summary>
+    property DebugShowCmdArgs: Boolean read FDebugShowCmdArgs
+                                       write FDebugShowCmdArgs;
+    /// <summary>
+    ///  Get's and Sets a DefaultDevice list in Ghostscript
+    /// </summary>
+    property DefaultDeviceList: TStrings read GetDefaultDeviceList
+                                         write SetDefaultDeviceList;
+    /// <summary>
+    ///  Returns True if Exit was called.
+    /// </summary>
+    property GSExit: Boolean read FExit;
+    /// <summary>
     ///  returns LastError from the API or Ghostscript
     /// </summary>
     property LastError: string read FLastError;
     /// <summary>
     ///  The LastErrors, we have to read the Error from StdError and we can get
-    ///  more as one. So we put the all in a list.
+    ///  more as one. So we put them all in a list.
     /// </summary>
     property LastErrors: string read GetLastErrors;
     /// <summary>
-    ///  The Last Error Code
+    ///  LastErrorCode from Ghostscript
     /// </summary>
     property LastErrorCode: Integer read FLastErrorCode;
     /// <summary>
-    ///  The event will be called after an InitWithArgs operation was executed
+    ///  Can be used to turn off the automatic Exit(gsapi_exit) call after
+    ///  InitWithArgs, but you have to call Exit by your self. A saver method
+    ///  is to use the OnAfterInitWithArgs event, which is executed after
+    ///  InitWithArgs and before Exit.
     /// </summary>
-    property OnAfterExecute: TNotifyEvent read FEventAfterExecute write FEventAfterExecute;
+    property NoExit: Boolean read FNoExit write FNoExit;
+    /// <summary>
+    ///  The event will be called after an operation is finished. (after Exit)
+    /// </summary>
+    property OnAfterExecute: TNotifyEvent read FEventAfterExecute
+                                          write FEventAfterExecute;
+    /// <summary>
+    ///  The event will be called after InitWithArgs and before Exit.
+    ///  You can use it to perform RunString* operations.
+    /// </summary>
+    property OnAfterInitWithArgs: TNotifyEvent read FEventAfterInitWithArgs
+                                               write FEventAfterInitWithArgs;
+    /// <summary>
+    ///  The callback function for polling.
+    ///  The polling function should return zero if all is well, and return
+    ///  negative if it wants Ghostscript to abort. This is often used for
+    ///  checking for a user cancel. This can also be used for handling window
+    ///  events or cooperative multitasking.
+    /// </summary>
+    /// <remarks>
+    ///  The polling function is called very frequently during interpretation
+    ///  and rendering so it must be fast. If the function is slow, then using a
+    ///  counter to return 0 immediately some number of times can be used to
+    ///  reduce the performance impact.
+    /// </remarks>
+    property OnPoll: TNotifyFuncEvent read FEventPoll write FEventPoll;
     /// <summary>
     ///  StdError from the Ghostscript library
     /// </summary>
@@ -503,6 +644,14 @@ type
     ///  debug informations.
     /// </summary>
     property OnStdOut: TGSEvent_Std read FEventStdOut write FEventStdOut;
+    /// <summary>
+    ///  The revision information of the Ghostscript DLL
+    /// </summary>
+    property Revision: TGS_Revision read FRevision;
+    /// <summary>
+    ///  The API stores the full informations of the StdOut here
+    /// </summary>
+    property StdInLog: TStrings read GetLogStdIn;
     /// <summary>
     ///  The API stores the full informations of the StdOut here
     /// </summary>
@@ -521,25 +670,101 @@ type
     /// </summary>
     destructor Destroy; override;
     /// <summary>
-    ///  Main methode to execute Ghostscript commands
+    ///  call gsapi_exit
+    /// </summary>
+    procedure Exit; virtual;
+    /// <summary>
+    ///  Main method to execute Ghostscript commands
     /// </summary>
     function InitWithArgs(AStrings: TStrings): Boolean; overload; virtual;
     /// <summary>
-    ///  Main methode to execute Ghostscript commands in a thread. This API will
+    ///  Main method to execute Ghostscript commands in a thread. This API will
     ///  only execute one thread at a time. After the thread is finished the
-    ///  OnAfterExecute Event is called.
+    ///  OnAfterExecute event is called.
     /// </summary>
     procedure InitWithArgsStart(AStrings: TStrings);
+    /// <summary>
+    ///  Checks if AResult = AError
+    /// </summary>
+    function IsError(AResult: Integer; AError: gs_error_type): Boolean;
+    /// <summary>
+    ///  Executes gsapi_run_file without any file checks
+    /// </summary>
+    /// <remarks>
+    ///  All Run* operations should be called after InitWidthArgs and before Exit.
+    ///  For this operations you have to set NoExit to true and to call Exit by
+    ///  your self.
+    /// </remarks>
+    function RunFile(AFile: string; AUserErrors: Integer; out AExitCode: Integer): Integer;
+    /// <summary>
+    ///  Executes gsapi_run_string
+    /// </summary>
+    /// <remarks>
+    ///  All Run* operations should be called after InitWidthArgs and before Exit.
+    ///  For this operations you have to set NoExit to true and to call Exit by
+    ///  your self.
+    /// </remarks>
+    function RunString(AStr: string; AUserErrors: Integer; out AExitCode: Integer): Integer;
+    /// <summary>
+    ///  Executes gsapi_run_begin
+    ///  This method have to be called before RunStringContinue. Make sure
+    ///  to call RunStringEnd at the end, otherwise Ghostscript is waiting for
+    ///  more input.
+    /// </summary>
+    /// <remarks>
+    ///  All Run* operations should be called after InitWidthArgs and before Exit.
+    ///  For this operations you have to set NoExit to true and to call Exit by
+    ///  your self.
+    /// </remarks>
+    function RunStringBegin(AUserErrors: Integer; out AExitCode: Integer): Integer;
+    /// <summary>
+    ///  Executes gsapi_run_string_continue
+    ///  This method have to be called after RunStringBegin
+    /// </summary>
+    /// <remarks>
+    ///  All Run* operations should be called after InitWidthArgs and before Exit.
+    ///  For this operations you have to set NoExit to true and to call Exit by
+    ///  your self.
+    /// </remarks>
+    function RunStringContinue(AStr: string; ALength: Cardinal;
+                               AUserErrors: Integer; out AExitCode: Integer): Integer;
+    /// <summary>
+    ///  Executes gsapi_run_string_end
+    ///  This method have to be called at the end of RunStringBegin/RunStringContinue,
+    ///  otherwise Ghostscript will wait for more input.
+    /// </summary>
+    /// <remarks>
+    ///  All Run* operations should be called after InitWidthArgs and before Exit.
+    ///  For this operations you have to set NoExit to true and to call Exit by
+    ///  your self.
+    /// </remarks>
+    function RunStringEnd(AUserErrors: Integer; out AExitCode: Integer): Integer;
+    /// <summary>
+    ///  Executes gsapi_run_string_with_length
+    ///  This method have to be called after InitWithArgs and before Exit.
+    /// </summary>
+    /// <remarks>
+    ///  All Run* operations should be called after InitWidthArgs and before Exit.
+    ///  For this operations you have to set NoExit to true and to call Exit by
+    ///  your self.
+    /// </remarks>
+    function RunStringWithLength(AStr: string; ALength: Cardinal;
+                                 AUserErrors: Integer; out AExitCode: Integer): Integer;
   end;
 
 implementation
 
-uses Clipbrd;
-
 {$REGION 'Callback Functions'}
 
+function StrPCopy(Dest: PAnsiChar; Source: AnsiString): PAnsiChar;
+begin
+  Result := {$IFDEF DELPHI}System.AnsiStrings.{$ENDIF}
+            {$IFDEF FPC}SysUtils.{$ENDIF}
+            StrPCopy(Dest, Source);
+end;
+
 function GSCallout(instance: Pointer; callout_handle: Pointer;
-                   device_name: PAnsiChar;
+                   const device_name: PAnsiChar;
                    id, size: Integer; data: Pointer): Integer; stdcall;
 var
   ADisplayCallback: p_gs_display_get_callback_t;
@@ -550,15 +775,16 @@ begin
   if (AApi = nil) then
     raise Exception.Create('GSCallout: TGS_Api object not found');
   // only check the display callback
-  if ((device_name <> nil) and (System.AnsiStrings.StrComp(device_name, 'display') = 0)) then
+  if ((device_name <> nil) and ({$IFDEF DELPHI}System.AnsiStrings.{$ENDIF}
+                                StrComp(device_name, 'display') = 0)) then
   begin
     case id of
       DISPLAY_CALLOUT_GET_CALLBACK:
       begin
         // we have to use the given pointer, that the record will get back
         ADisplayCallback := p_gs_display_get_callback_t(data);
-        ADisplayCallback.callback := @AApi.GSDisplay.FCallback;
-        ADisplayCallback.caller_handle := AApi.GSDisplay;
+        ADisplayCallback^.callback := @AApi.GSDisplay.FCallback;
+        ADisplayCallback^.caller_handle := AApi.GSDisplay;
         AApi.DebugLog('TGSDisplay: Display structure initialized');
         Result := 0;
       end;
@@ -566,46 +792,50 @@ begin
   end;
 end;
 
-function GSStdIn(ACaller: Pointer; ABuffer: PAnsiChar; ALen: Integer) : Integer; stdcall;
+function GSStdIn(ACaller: Pointer; ABuffer: PAnsiChar;
+  ALen: Integer): Integer; stdcall;
 var
   Text: AnsiString;
   AApi: TGS_Api;
 begin
+  //TODO: Check the StdIn, because its usally an input
   Text := '';
   AApi := TGS_Api(ACaller);
 
-  System.AnsiStrings.StrPCopy(ABuffer, Text);
+  StrPCopy(ABuffer, Text);
   AApi.StdIn(string(Text));
   Result := Length(Text);
 end;
 
-function GSStdOut(ACaller: Pointer; ABuffer: PAnsiChar; ALen: Integer): Integer; stdcall;
+function GSStdOut(ACaller: Pointer; const ABuffer: PAnsiChar;
+  ALen: Integer): Integer; stdcall;
 var
   AStr: AnsiString;
   Buffer: PAnsiChar;
   AApi: TGS_Api;
 begin
-	GetMem(Buffer, ALen + 1);
-	FillMemory(Buffer, ALen + 1, 0);
-	CopyMemory(Buffer, ABuffer, ALen);
+  GetMem(Buffer, ALen + 1);
+  FillMemory(Buffer, ALen + 1, 0);
+  CopyMemory(Buffer, ABuffer, ALen);
 
   AApi := TGS_Api(ACaller);
   AStr := AnsiString(Buffer);
-	AApi.StdOut(string(AStr));
+  AApi.StdOut(string(AStr));
 
   FreeMem(Buffer);
-	Result := ALen;
+  Result := ALen;
 end;
 
-function GSStdErr(ACaller: Pointer; ABuffer: PAnsiChar; ALen: Integer): Integer; stdcall;
+function GSStdErr(ACaller: Pointer; const ABuffer: PAnsiChar;
+  ALen: Integer): Integer; stdcall;
 var
   AStr: AnsiString;
   Buffer: PAnsiChar;
   AApi: TGS_Api;
 begin
-	GetMem(Buffer, ALen + 1);
-	FillMemory(Buffer, ALen + 1, 0);
-	CopyMemory(Buffer, ABuffer, ALen);
+  GetMem(Buffer, ALen + 1);
+  FillMemory(Buffer, ALen + 1, 0);
+  CopyMemory(Buffer, ABuffer, ALen);
 
   AApi := TGS_Api(ACaller);
   AStr := AnsiString(Buffer);
@@ -617,8 +847,7 @@ end;
 
 function GSPoll(ACaller: Pointer): Integer; stdcall;
 begin
-  Result := 0;
-  //TGS_Api(ACaller).Poll;
+  Result := TGS_Api(ACaller).Poll;
 end;
 
 {$ENDREGION}
@@ -714,6 +943,49 @@ begin
   Init('');
 end;
 
+function TGS_Api.CheckRunResult(AResult: Integer): Integer;
+begin
+  Result := AResult;
+  if (AResult <= Integer(gs_error_Fatal)) and
+     (AResult <> ord(gs_error_NeedInput)) and
+     (AResult <> ord(gs_error_NeedFile)) then
+  begin
+    // call Exit
+    Result := CheckResult(-101);
+  end;
+end;
+
+function TGS_Api.CheckRunString: Boolean;
+begin
+  Result := FInitWithArgs and not FExit;
+  if (not Result) then
+    SetLastError('RunString* operations have to be called after InitWithArgs ' +
+                 'and before Exit');
+end;
+
+procedure TGS_Api.AfterExecute;
+begin
+  if (Assigned(FEventAfterExecute)) then
+    FEventAfterExecute(Self);
+end;
+
+procedure TGS_Api.AfterInitWithArgs;
+begin
+  if (Assigned(FEventAfterInitWithArgs)) then
+    FEventAfterInitWithArgs(Self);
+end;
+
+function TGS_Api.CheckResult(AResult: Integer): Integer;
+begin
+  Result := AResult;
+  if (IsError(Result, gs_error_Quit)) then
+  begin
+    // we need to call gsapi_exit, this is not an error -> see SkiSys.GS_Errors
+    Exit;
+    Result := 0;
+  end;
+end;
+
 procedure TGS_Api.ClearInternalLog;
 begin
   FLastErrors.Clear;
@@ -731,11 +1003,13 @@ end;
 procedure TGS_Api.DebugLog(AText: string);
 begin
   if (Debug) then
-    StdOut(AText + #13#10);
+    StdOutLine(AText);
 end;
 
 destructor TGS_Api.Destroy;
 begin
+  if (FDefaultDeviceList <> nil) then
+    FreeAndNil(FDefaultDeviceList);
   if (GSDisplay <> nil) then
     FreeAndNil(GSDisplay);
   if (FDebugParams <> nil) then
@@ -752,12 +1026,28 @@ begin
   inherited;
 end;
 
+procedure TGS_Api.Exit;
+begin
+  if (not FExit) then
+  begin
+    FLastErrorCode := gsapi_exit(FInstance);
+    FExit := FLastErrorCode > -1;
+    if (FExit) then
+      DebugLog('gsapi_exit called succesfully')
+    else
+      raise Exception.CreateFmt('Error(%d) on gsapi_exit', [FLastErrorCode]);
+  end;
+end;
+
 procedure TGS_Api.FreeGSInstance;
 begin
   if (Assigned(FInstance)) then
   begin
+    gsapi_deregister_callout(FInstance, @GSCallout, Self);
     gsapi_delete_instance(FInstance);
     FInstance := nil;
+    FExit := False;
+    FInitWithArgs := False;
   end;
 end;
 
@@ -767,14 +1057,52 @@ var
 begin
   SetLength(Result, AStrings.Count);
   for i := 0 to High(Result) do
-  begin
     Result[i] := AnsiString(AStrings[i]);
-  end;
+end;
+
+function TGS_Api.GetDefaultDeviceList: TStrings;
+var
+  PStr: PList;
+  ALen, i: Integer;
+  AError: string;
+begin
+  Result := nil;
+  ALen := 0;
+  if (FDefaultDeviceList = nil) then
+  begin
+    // we need to check if InitWidthArgs was be called before, because this
+    // function can only be excuted before gsapi_init_with_args
+    if (FInitWithArgs) then
+      InitGSInstance;
+
+    FLastErrorCode := CheckResult(gsapi_get_default_device_list(FInstance,
+                                                                @PStr, ALen));
+    if (FLastErrorCode = 0) then
+    begin
+      FDefaultDeviceList := TStringList.Create;
+      Result := FDefaultDeviceList;
+      for i := 0 to ALen - 1 do
+      begin
+        if (PStr[i] <> '') then
+          FDefaultDeviceList.Add(String(AnsiString(PStr[i])));
+      end;
+    end else
+    begin
+      AError := Format('Error on GetDefaultDeviceList: error_code=%d', [FLastErrorCode]);
+      SetLastError(AError, 0); // set the error and not the error_code
+    end;
+  end else
+    Result := FDefaultDeviceList;
 end;
 
 function TGS_Api.GetLastErrors: string;
 begin
   Result := FLastErrors.Text;
+end;
+
+function TGS_Api.GetLogStdIn: TStrings;
+begin
+  Result := FLogStdIn;
 end;
 
 function TGS_Api.GetLogStdOut: TStrings;
@@ -788,9 +1116,7 @@ var
 begin
   SetLength(Result, High(AAnsiStrings) + 1);
   for i := 0 to High(Result) do
-  begin
     Result[i] := PAnsiChar(AAnsiStrings[i]);
-  end;
 end;
 
 procedure TGS_Api.Init(ADllPath: string);
@@ -806,8 +1132,10 @@ begin
     if (FDllPath[length(FDllPath)-1] <> '\') then
       FDllPath := FDllPath + '\';
     ADllFile := FDllPath + GS_DLL;
-    SetDllDirectory(PChar(FDllPath));
-  end;
+    {$IFDEF DELPHI}SetDllDirectory(PChar(FDllPath));{$ENDIF}
+  end else
+    ADllFile := ExpandFileName(ADllFile);
+
 
   if (not FileExists(ADllFile)) then
     raise Exception.CreateFmt('couldn''t find the Ghostscript Dll at %s', [ADllFile]);
@@ -825,10 +1153,8 @@ begin
     FreeGSInstance;
 
     FLastErrorCode := gsapi_new_instance(FInstance, @Self);
-    if (FLastErrorCode <> 0) then
-    begin
+    if (FLastErrorCode < 0) then
       raise Exception.CreateFmt('Error(%d): GS Instance couldn''t be created!', [FLastErrorCode]);
-    end;
     if (FRevision = nil) then
       FRevision := TGS_Revision.Create(Self)
     else
@@ -855,20 +1181,31 @@ begin
       // create a new instance, if gsapi_init_with_args was used before
       // to prevent a fatal error from ghostscript at the 2nd try
       InitGSInstance;
-      gsapi_set_arg_encoding(FInstance, Integer(FArgumentEncoding));
-      FLastErrorCode := gsapi_init_with_args(FInstance, High(AArgs) + 1, AArgs);
+      // set the argument encoding
+      FLastErrorCode := gsapi_set_arg_encoding(FInstance, Integer(FArgumentEncoding));
+      if (FLastErrorCode < 0) then
+        raise Exception.CreateFmt('Error(%d) on gsapi_set arg encoding)', [FLastErrorCode]);
+      // call iit_with_args
+      FLastErrorCode := CheckResult(gsapi_init_with_args(FInstance,
+                                                         High(AArgs) + 1, AArgs));
+      AfterInitWithArgs;
     except
       on E: Exception do
-      begin
-        FLastErrorCode := Integer(gs_error_unknownerror);
-        SetLastError('Error InitWithArgs: ' + e.Message);
-      end;
+        SetLastError('Error InitWithArgs: ' + e.Message, Integer(gs_error_unknownerror));
     end;
   finally
     FInitWithArgs := True;
-    gsapi_exit(FInstance);
+    if (not FNoExit) then
+      Exit;
   end;
   Result := FLastErrorCode = 0;
+end;
+
+function TGS_Api.Poll: Integer;
+begin
+  Result := 0;
+  if (Assigned(FEventPoll)) then
+    Result := FEventPoll(Self);
 end;
 
 function TGS_Api.InitWithArgs(AStrings: TStrings): Boolean;
@@ -885,17 +1222,20 @@ begin
       if (Debug) then
       begin
         ACmdArgs := GS_EXE;
-        StdOut('---  Debug Init Parameters  ---' + #13#10);
+        StdOutLine('---  Debug Init Parameters  ---');
         for i := 0 to AStrings.Count - 1 do
         begin
-          StdOut('SetParam: ' + AStrings[i] + #13#10);
+          StdOutLine('SetParam: ' + AStrings[i]);
           ACmdArgs := ACmdArgs + ' ' + AStrings[i];
         end;
-        StdOut('--- END ---' + #13#10);
-        StdOut('--- CMD Args ---' + #13#10);
+        StdOutLine('--- END ---');
+      end;
+      if (DebugShowCmdArgs) then
+      begin
+        StdOutLine('--- CMD Args ---');
         //TODO: Some output might be corrupted, because of whitespaces
-        StdOut(ACmdArgs + #13#10);
-        StdOut('--- CMD Args END ---' + #13#10);
+        StdOutLine(ACmdArgs);
+        StdOutLine('--- CMD Args END ---');
       end;
 
       AAnsiStrs := GetAnsiStrArray(AStrings);
@@ -918,14 +1258,113 @@ begin
   TGS_ApiThread.Create(Self, AStrings);
 end;
 
+function TGS_Api.IsError(AResult: Integer; AError: gs_error_type): Boolean;
+begin
+  Result := AResult = Integer(AError);
+end;
+
+function TGS_Api.RunFile(AFile: string; AUserErrors: Integer;
+  out AExitCode: Integer): Integer;
+begin
+  Result := CheckRunResult(gsapi_run_file(FInstance, PAnsiChar(AnsiString(AFile)),
+                                          AUserErrors, AExitCode));
+  if (Result < 0) then
+    FLastErrorCode := Result;
+end;
+
+function TGS_Api.RunString(AStr: string; AUserErrors: Integer;
+  out AExitCode: Integer): Integer;
+begin
+  Result := -1;
+  if (CheckRunString) then
+  begin
+    Result := CheckRunResult(gsapi_run_string(FInstance, PAnsiChar(AnsiString(AStr)),
+                                              AUserErrors, AExitCode));
+    if (Result < 0) and not (Result = Integer(gs_error_Quit)) then
+      FLastErrorCode := Result;
+  end;
+end;
+
+function TGS_Api.RunStringBegin(AUserErrors: Integer;
+  out AExitCode: Integer): Integer;
+begin
+  Result := -1;
+  if (CheckRunString) then
+  begin
+    Result := CheckRunResult(gsapi_run_string_begin(FInstance, AUserErrors, AExitCode));
+    if (Result < 0) then
+      FLastErrorCode := Result;
+  end;
+end;
+
+function TGS_Api.RunStringContinue(AStr: string; ALength: Cardinal;
+  AUserErrors: Integer; out AExitCode: Integer): Integer;
+begin
+  Result := -1;
+  if (CheckRunString) then
+  begin
+    Result := CheckRunResult(gsapi_run_string_continue(FInstance,
+                               PAnsiChar(AnsiString(AStr)), ALength,
+                               AUserErrors, AExitCode));
+    if (Result < 0) then
+      FLastErrorCode := Result;
+  end;
+end;
+
+function TGS_Api.RunStringEnd(AUserErrors: Integer;
+  out AExitCode: Integer): Integer;
+begin
+  Result := -1;
+  if (CheckRunString) then
+  begin
+    Result := CheckRunResult(gsapi_run_string_end(FInstance, AUserErrors, AExitCode));
+    if (Result < 0) then
+      FLastErrorCode := Result;
+  end;
+end;
+
+function TGS_Api.RunStringWithLength(AStr: string; ALength: Cardinal;
+  AUserErrors: Integer; out AExitCode: Integer): Integer;
+begin
+  Result := -1;
+  if (CheckRunString) then
+  begin
+    Result := CheckRunResult(gsapi_run_string_with_length(FInstance,
+                               PAnsiChar(AnsiString(AStr)), ALength,
+                               AUserErrors, AExitCode));
+    if (Result < 0) then
+      FLastErrorCode := Result;
+  end;
+end;
+
+procedure TGS_Api.SetDefaultDeviceList(ADeviceList: TStrings);
+begin
+  if (FDefaultDeviceList <> ADeviceList) then
+  begin
+    if (FDefaultDeviceList = nil) then
+      FDefaultDeviceList := TStringList.Create;
+
+    FDefaultDeviceList.Assign(ADeviceList);
+    FDefaultDeviceList.Delimiter := ' ';
+    FLastErrorCode := CheckResult(gsapi_set_default_device_list(FInstance,
+                        PAnsiChar(AnsiString(FDefaultDeviceList.Text)),
+                        FDefaultDeviceList.Text.Length));
+    if (FLastErrorCode < 0) then
+      SetLastErrorInternal('Error on SetDefaultDeviceList', FLastErrorCode);
+  end;
+end;
+
 procedure TGS_Api.SetDefaultValues;
 begin
   FDllPath := GetCurrentDir;
   FDebug := False;
+  FDefaultDeviceList := nil; // will be initialized as nil and when needed filled
   FInstance := nil;
   FLastError := '';
   FLastErrorCode := 0;
   FArgumentEncoding := GS_ARG_ENCODING_UTF8;
+  FInitWithArgs := False;
+  FExit := False;
 end;
 
 procedure TGS_Api.SetLastError(AText: string; AErrorCode: Integer = -1);
@@ -937,6 +1376,11 @@ begin
     if (Assigned(FEventStdError)) then
       FEventStdError(AText);
   end;
+end;
+
+procedure TGS_Api.SetLastError(AText: string; AErrorCode: gs_error_type);
+begin
+  SetLastError(AText, Integer(AErrorCode));
 end;
 
 procedure TGS_Api.SetLastErrorCode(ACode: gs_error_type);
@@ -962,7 +1406,7 @@ begin
   if (gsapi_set_stdio_with_handle(FInstance, @GSStdIn, @GSStdOut, @GSStdErr, Self) <> 0) then
     raise Exception.Create('Could not set stdio functions');
   // for display operations
-  if (gsapi_set_poll(FInstance, @GSPoll) <> 0) then
+  if (gsapi_set_poll_with_handle(FInstance, @GSPoll, Self) <> 0) then
     raise Exception.Create('Could not set poll function');
 
   if (gsapi_register_callout(FInstance, @GSCallout, Self) <> 0) then
@@ -1006,11 +1450,15 @@ begin
     FEventStdOut(AStr);
 end;
 
+procedure TGS_Api.StdOutLine(AText: string);
+begin
+  StdOut(AText + #10);
+end;
+
 procedure TGS_Api.ThreadFinished(Sender: TObject);
 begin
   FThreadRunning := False;
-  if (Assigned(FEventAfterExecute)) then
-    FEventAfterExecute(Self);
+  AfterExecute;
 end;
 
 {$ENDREGION}
@@ -1019,9 +1467,11 @@ end;
 
 procedure TGS_Revision.CheckRevision;
 begin
+{$IFNDEF DONT_CHECK_GS_REVISION}
   if (Revision < MIN_GHOSTSCRIPT_REVISION) then
     raise EInvalidGhostscriptVersionException.Create(
       'This Ghostscript version is not supported by the API');
+{$ENDIF}
 end;
 
 constructor TGS_Revision.Create(AApi: TGS_API);
@@ -1034,6 +1484,7 @@ procedure TGS_Revision.GetRevision(AApi: TGS_API);
 var
   AError: string;
   ARevision: gsapi_revision_t;
+  AOuterException: Exception;
 begin
   try
     AApi.FLastErrorCode := gsapi_revision(@ARevision, sizeof(ARevision));
@@ -1051,7 +1502,13 @@ begin
     begin
       AError := 'Error on TGS_Revision.GetRevision: ' + E.Message;
       AApi.SetLastError(AError);
-      E.RaiseOuterException(Exception.Create(AError));
+      AOuterException := Exception.Create(AError);
+      {$IFDEF DELPHI}
+      E.RaiseOuterException(AOuterException);
+      {$ENDIF}
+      {$IFDEF FPC}
+      raise AOuterException at get_caller_addr(get_frame), get_caller_frame(get_frame);
+      {$ENDIF}
     end;
   end;
 end;
@@ -1301,10 +1758,11 @@ begin
   FCallback.display_update := GSDisplayUpdate;
 {$IFDEF USE_GSDisplayMemAlloc}
   FCallback.display_memalloc := GSDisplayMemAlloc;
+  FCallback.display_memfree := GSDisplayMemFree;
 {$ELSE}
   FCallback.display_memalloc := nil;
+  FCallback.display_memfree := nil;
 {$ENDIF}
-  FCallback.display_memfree := GSDisplayMemFree;
   FCallback.display_separation := GSDisplaySeparation;
   FCallback.display_adjust_band_height := GSDisplayAdjustBandHeight;
   FCallback.display_rectangle_request := GSDisplayRectangleRequest;
@@ -1341,6 +1799,11 @@ begin
   FGS_Raster := ARaster;
   SetBmpInfoHeader(AWidth, AHeight);
   SetImageData(PImage);
+end;
+
+procedure TGS_Image.ConvertImageDataLine(ADataLine: Pointer);
+begin
+  //TODO: implement convert funtions
 end;
 
 constructor TGS_Image.Create(ADisplays: TGS_Display; AData: TGS_ImageData);
@@ -1497,10 +1960,10 @@ begin
         // In Windows we will paint the image bottom first, so we need to start
         // at the last row and end at the first row
         Row := FBmpInfoHeader.biHeight - 1 - i;
-        // copy the image memory to the bitmap memory
+        // copy the image data buffer to the bitmap memory
         CopyMemory(DestBytes, PImage + AByteWidth * Row, AByteWidth);
         // convert if needed
-        //TODO: implement convert functions
+        ConvertImageDataLine(DestBytes);
       end;
     end else
     begin

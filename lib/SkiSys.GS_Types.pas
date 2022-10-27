@@ -3,7 +3,7 @@
 {       Ghostscript API Wrapper: An extended Ghostscript API for Delphi        }
 {       to simplify use of Ghostscript.                                        }
 {                                                                              }
-{       Copyright (c) 2021-2022 (Ski-Systems)                                  }
+{       Copyright (c) 2021-2022 (SKI-Systems)                                  }
 {       Author: Jan Blumstengel                                                }
 {                                                                              }
 {       https://github.com/SKI-Systems/Ghostscript-API-Wrapper                 }
@@ -27,24 +27,32 @@
 
 unit SkiSys.GS_Types;
 
+{$IFDEF FPC}
+  {$MODE DELPHI}
+  {$H+}
+{$ELSE} //Delphi
+  {$DEFINE DELPHI}
+{$ENDIF}
+
 interface
 
-uses
-  WinApi.Windows;
 
-  // C declaration is 4 byte long we need it for the DLL implementation
-  {$MINENUMSIZE 4}
+// C declaration is 4 byte long we need it for the DLL implementation
+{$MINENUMSIZE 4}
 
 const
-{$IFDEF WIN32}
-  GS_EXE = 'gswin32.exe';
-  GS_CMD_EXE = 'gswin32c.exe';
-  GS_DLL = 'gsdll32.dll';
-{$ELSE}
-  GS_EXE = 'gswin64.exe';
-  GS_CMD_EXE = 'gswin64c.exe';
-  GS_DLL = 'gsdll64.dll';
+{$IFDEF MSWINDOWS}
+  {$IFDEF WIN32}
+    GS_EXE = 'gswin32.exe';
+    GS_CMD_EXE = 'gswin32c.exe';
+    GS_DLL = 'gsdll32.dll';
+  {$ELSE}
+    GS_EXE = 'gswin64.exe';
+    GS_CMD_EXE = 'gswin64c.exe';
+    GS_DLL = 'gsdll64.dll';
+  {$ENDIF}
 {$ENDIF}
+
 
 type
   PArgv = array of PAnsiChar;
@@ -57,6 +65,7 @@ type
     revision: LongInt;
     revisiondate: LongInt;
   end;
+
 
   stdin_fn_t = function(caller_handle: Pointer; buf: PAnsiChar; len: Integer): Integer; stdcall;
 
@@ -141,38 +150,37 @@ type
   // SkiSys.GS_Api
   // at the moment is gp_file.h not included in the API
 
-  (*
-  typedef struct
-  {
-      int (*open_file)(const gs_memory_t *mem,
-                             void        *secret,
-                       const char        *fname,
-                       const char        *mode,
-                             gp_file    **file);
-      int (*open_pipe)(const gs_memory_t *mem,
-                             void        *secret,
-                       const char        *fname,
-                             char        *rfname, ///  4096 bytes ///
-                       const char        *mode,
-                             gp_file    **file);
-      int (*open_scratch)(const gs_memory_t *mem,
-                                void        *secret,
-                          const char        *prefix,
-                                char        *rfname, ///  4096 bytes ///
-                          const char        *mode,
-                                int          rm,
-                                gp_file    **file);
-      int (*open_printer)(const gs_memory_t *mem,
-                                void        *secret,
-                                char        *fname, ///  4096 bytes ///
-                                int          binary,
-                                gp_file    **file);
-      int (*open_handle)(const gs_memory_t *mem,
-                               void        *secret,
-                               char        *fname, ///  4096 bytes ///
-                         const char        *mode,
-                               gp_file    **file);
-  } gsapi_fs_t; *)
+  //typedef struct
+  //{
+  //    int (*open_file)(const gs_memory_t *mem,
+  //                           void        *secret,
+  //                     const char        *fname,
+  //                     const char        *mode,
+  //                           gp_file    **file);
+  //    int (*open_pipe)(const gs_memory_t *mem,
+  //                           void        *secret,
+  //                     const char        *fname,
+  //                           char        *rfname, ///  4096 bytes ///
+  //                     const char        *mode,
+  //                           gp_file    **file);
+  //    int (*open_scratch)(const gs_memory_t *mem,
+  //                              void        *secret,
+  //                        const char        *prefix,
+  //                              char        *rfname, ///  4096 bytes ///
+  //                        const char        *mode,
+  //                              int          rm,
+  //                              gp_file    **file);
+  //    int (*open_printer)(const gs_memory_t *mem,
+  //                              void        *secret,
+  //                              char        *fname, ///  4096 bytes ///
+  //                              int          binary,
+  //                              gp_file    **file);
+  //    int (*open_handle)(const gs_memory_t *mem,
+  //                             void        *secret,
+  //                             char        *fname, ///  4096 bytes ///
+  //                       const char        *mode,
+  //                             gp_file    **file);
+  //} gsapi_fs_t;
 
   //TODO: implement the other header files for this
   gs_memory_t = Pointer;

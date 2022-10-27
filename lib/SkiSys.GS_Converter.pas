@@ -3,7 +3,7 @@
 {       Ghostscript API Wrapper: An extended Ghostscript API for Delphi        }
 {       to simplify use of Ghostscript.                                        }
 {                                                                              }
-{       Copyright (c) 2021-2022 (Ski-Systems)                                  }
+{       Copyright (c) 2021-2022 (SKI-Systems)                                  }
 {       Author: Jan Blumstengel                                                }
 {                                                                              }
 {       https://github.com/SKI-Systems/Ghostscript-API-Wrapper                 }
@@ -27,11 +27,24 @@
 
 unit SkiSys.GS_Converter;
 
+{$IFDEF FPC} //Free Pascal
+  {$MODE DELPHI}
+  {$H+}
+{$ELSE} //Delphi
+  {$DEFINE DELPHI}
+{$ENDIF}
+
 interface
 
 uses
-  SkiSys.GS_API, SkiSys.GS_ParameterTypes, SkiSys.GS_Errors,
-  Classes, SysUtils, Windows;
+  SkiSys.GS_API, SkiSys.GS_ParameterTypes, SkiSys.GS_Errors
+{$IFDEF DELPHI}
+  , System.Classes, System.SysUtils
+{$ENDIF}
+{$IFDEF FPC}
+  , Classes, SysUtils
+{$ENDIF}
+  ;
 
 type
   TGS_PdfConverter = class(TGS_Api)
@@ -206,7 +219,7 @@ end;
 
 procedure TGS_PdfConverter.ThreadFinished(Sender: TObject);
 begin
-  StdOut('---  Operation convert finished!  ---' + #13#10);
+  StdOutLine('---  Operation convert finished!  ---');
   inherited;
 end;
 

@@ -3,7 +3,7 @@
 {       Ghostscript API Wrapper: An extended Ghostscript API for Delphi        }
 {       to simplify use of Ghostscript.                                        }
 {                                                                              }
-{       Copyright (c) 2021-2022 (Ski-Systems)                                  }
+{       Copyright (c) 2021-2022 (SKI-Systems)                                  }
 {       Author: Jan Blumstengel                                                }
 {                                                                              }
 {       https://github.com/SKI-Systems/Ghostscript-API-Wrapper                 }
@@ -28,21 +28,35 @@
 //  Wrapper unit for the iapi.h file
 unit SkiSys.GS_Dll;
 
+{$IFDEF FPC} // Free Pascal
+  {$MODE DELPHI}
+  {$H+} //use AnsiStrings in Free Pascal
+{$ELSE} //Delphi
+  {$DEFINE DELPHI}
+{$ENDIF}
+
 interface
 
-// unterdrück platformspezifische Warnungen, die Unit wird nur unter Windows benutzt
+// don't show platform warnings, because no other support is added atm
 {$WARN UNIT_PLATFORM OFF}
 {$WARN SYMBOL_PLATFORM OFF}
 
 uses
-  SkiSys.GS_Types, SkiSys.GS_gdevdsp,
-  Classes, SysUtils, Windows;
+  SkiSys.GS_Types, SkiSys.GS_gdevdsp
+{$IFDEF FPC}
+  , Classes, SysUtils, Windows
+{$ENDIF}
+{$IFDEF DELPHI}
+  , System.Classes, System.SysUtils, WinApi.Windows
+{$ENDIF}
+  ;
 
   // C declaration is 4 byte long we need it for the DLL implementation
   {$MINENUMSIZE 4}
 
 
-  // DLL Methods - declared as delayed for later use
+  // DLL Methods - declared as delayed for later use in Delphi
+  // FPC doesn't support this feature atm.
 
 {$IFNDEF display_callback_DEFINED}
 // declared to avoid errors from an deprecated methode
@@ -62,7 +76,8 @@ type
   ///  size of the structure.
   /// </summary>
   function gsapi_revision(pr: p_gsapi_revision_t; len: Integer): Integer;
-                          stdcall; external GS_DLL delayed;
+                          stdcall; external GS_DLL
+                          {$IFDEF DELPHI}delayed{$ENDIF};
 
   /// <summary>
   ///  Create a new instance of Ghostscript.
@@ -71,7 +86,8 @@ type
   /// </summary>
   function gsapi_new_instance(out pinstance: Pointer;
                               caller_handle: Pointer): Integer;
-                              stdcall; external GS_DLL delayed;
+                              stdcall; external GS_DLL
+                              {$IFDEF DELPHI}delayed{$ENDIF};
 
   /// <summary>
   ///  Destroy an instance of Ghostscript
@@ -80,7 +96,8 @@ type
   ///  before gsapi_delete_instance.
   /// </summary>
   procedure gsapi_delete_instance(instance: Pointer);
-                                  stdcall; external GS_DLL delayed;
+                                  stdcall; external GS_DLL
+                                  {$IFDEF DELPHI}delayed{$ENDIF};
 
   /// <summary>
   ///  Set the callback functions for stdio
@@ -92,7 +109,8 @@ type
   /// </summary>
   function gsapi_set_stdio(instance: Pointer; stdin_fn: stdin_fn_t;
                            stdout: stdout_fn_t; stderr: stderr_fn_t): Integer;
-                           stdcall; external GS_DLL delayed;
+                           stdcall; external GS_DLL
+                           {$IFDEF DELPHI}delayed{$ENDIF};
 
   /// <summary>
   ///  Does the same as the above, but using the caller_handle given here,
@@ -101,7 +119,8 @@ type
   function gsapi_set_stdio_with_handle(instance: Pointer; stdin_fn: stdin_fn_t;
                                        stdout: stdout_fn_t; stderr: stderr_fn_t;
                                        caller_handle: Pointer): Integer;
-                                       stdcall; external GS_DLL delayed;
+                                       stdcall; external GS_DLL
+                                       {$IFDEF DELPHI}delayed{$ENDIF};
 
 
   /// <summary>
@@ -115,7 +134,8 @@ type
   ///  The polling function must be fast.
   /// </summary>
   function gsapi_set_poll(instance: Pointer; poll_fn: poll_fn_t): Integer;
-                          stdcall; external GS_DLL delayed;
+                          stdcall; external GS_DLL
+                          {$IFDEF DELPHI}delayed{$ENDIF};
 
   /// <summary>
   ///  Does the same as the above, but using the caller_handle given here,
@@ -123,7 +143,8 @@ type
   /// </summary>
   function gsapi_set_poll_with_handle(instance: Pointer; poll_fn: poll_fn_t;
                                       caller_handle: Pointer): Integer;
-                                      stdcall; external GS_DLL delayed;
+                                      stdcall; external GS_DLL
+                                      {$IFDEF DELPHI}delayed{$ENDIF};
 
   /// <summary>
   ///  Set the display device callback structure.
@@ -134,7 +155,8 @@ type
   /// </summary>
   function gsapi_set_display_callback(instance: Pointer;
                                       callback: pdisplay_callback): Integer;
-                                      stdcall; external GS_DLL delayed;
+                                      stdcall; external GS_DLL
+                                      {$IFDEF DELPHI}delayed{$ENDIF};
            deprecated 'Use the gsapi_register_callout mechanism instead.';
 
   /// <summary>
@@ -144,14 +166,16 @@ type
   /// </summary>
   function gsapi_register_callout(instance: Pointer; callout: gs_callout;
                                   callout_handle: Pointer): Integer;
-                                  stdcall; external GS_DLL delayed;
+                                  stdcall; external GS_DLL
+                                  {$IFDEF DELPHI}delayed{$ENDIF};
 
   /// <summary>
   ///  Deregister a handler for gs callouts.
   /// </summary>
   procedure gsapi_deregister_callout(instance: Pointer; callout: gs_callout;
                                      callout_handle: Pointer);
-                                     stdcall; external GS_DLL delayed;
+                                     stdcall; external GS_DLL
+                                     {$IFDEF DELPHI}delayed{$ENDIF};
 
   /// <summary>
   ///  Set the string containing the list of default device names
@@ -163,16 +187,19 @@ type
   /// </summary>
   function gsapi_set_default_device_list(instance: Pointer;
                                          list: PAnsiChar; listlen: Integer): Integer;
-                                         stdcall; external GS_DLL delayed;
+                                         stdcall; external GS_DLL
+                                         {$IFDEF DELPHI}delayed{$ENDIF};
 
   /// <summary>
   ///  Returns a pointer to the current default device string
+  ///  The list of devices is seperated with spaces.
   ///  *Must* be called after gsapi_new_instance().
   /// </summary>
   function gsapi_get_default_device_list(instance: Pointer;
                                          list: PList;
-                                         listlen: PInteger): Integer;
-                                         stdcall; external GS_DLL delayed;
+                                         out listlen: Integer): Integer;
+                                         stdcall; external GS_DLL
+                                         {$IFDEF DELPHI}delayed{$ENDIF};
 
   /// <summary>
   ///  Set the encoding used for the args. By default we assume
@@ -182,7 +209,8 @@ type
   ///  this function) is now deprecated!
   /// </summary>
   function gsapi_set_arg_encoding(instance: Pointer; encoding: Integer): Integer;
-                                  stdcall; external GS_DLL delayed;
+                                  stdcall; external GS_DLL
+                                  {$IFDEF DELPHI}delayed{$ENDIF};
 
 
   /// <summary>
@@ -199,14 +227,17 @@ type
   ///     with gsapi_exit(). <para/>
   /// </summary>
   function gsapi_init_with_args(instance: Pointer; argc: Integer; argv: PArgv): Integer;
-                                stdcall; external GS_DLL delayed;
+                                stdcall; external GS_DLL
+                                {$IFDEF DELPHI}delayed{$ENDIF};
 
   {$IF Defined(MSWindows)}
   function gsapi_init_with_argsA(instance: Pointer; argc: Integer; argv: PArgv): Integer;
-                                 stdcall; external GS_DLL delayed;
+                                 stdcall; external GS_DLL
+                                 {$IFDEF DELPHI}delayed{$ENDIF};
 
   function gsapi_init_with_argsW(instance: Pointer; argc: Integer; argv: PArgv): Integer;
-                                 stdcall; external GS_DLL delayed;
+                                 stdcall; external GS_DLL
+                                 {$IFDEF DELPHI}delayed{$ENDIF};
   {$ENDIF}
 
   /// <summary>
@@ -217,47 +248,56 @@ type
   ///  The only exception is gsapi_run_string_continue()
   ///  which will return gs_error_NeedInput if all is well.
   /// </summary>
+
   function gsapi_run_string_begin(instance: Pointer;
                                   user_errors: Integer;
-                                  pexit_code: PInteger): Integer;
-                                  stdcall; external GS_DLL delayed;
+                                  out pexit_code: Integer): Integer;
+                                  stdcall; external GS_DLL
+                                  {$IFDEF DELPHI}delayed{$ENDIF};
 
   function gsapi_run_string_continue(instance: Pointer;
                                      const str: PAnsiChar; length: UInt;
                                      user_errors: Integer;
-                                     pexit_code: PInteger): Integer;
-                                     stdcall; external GS_DLL delayed;
+                                     out pexit_code: Integer): Integer;
+                                     stdcall; external GS_DLL
+                                     {$IFDEF DELPHI}delayed{$ENDIF};
 
   function gsapi_run_string_end(instance: Pointer;
-                                user_errors: Integer; pexit_code: PInteger): Integer;
-                                stdcall; external GS_DLL delayed;
+                                user_errors: Integer; out pexit_code: Integer): Integer;
+                                stdcall; external GS_DLL
+                                {$IFDEF DELPHI}delayed{$ENDIF};
 
   function gsapi_run_string_with_length(instance: Pointer;
                                         const str: PAnsiChar; length: UInt;
                                         user_errors: Integer;
-                                        pexit_code: PInteger): Integer;
-                                        stdcall; external GS_DLL delayed;
+                                        out pexit_code: Integer): Integer;
+                                        stdcall; external GS_DLL
+                                        {$IFDEF DELPHI}delayed{$ENDIF};
 
   function gsapi_run_string(instance: Pointer;
                             const str: PAnsiChar; user_errors: Integer;
-                            pexit_code: PInteger): Integer;
-                            stdcall; external GS_DLL delayed;
+                            out pexit_code: Integer): Integer;
+                            stdcall; external GS_DLL
+                            {$IFDEF DELPHI}delayed{$ENDIF};
 
   function gsapi_run_file(instance: Pointer;
                           const file_name: PAnsiChar;
-                          user_errors: Integer; pexit_code: PInteger): Integer;
-                          stdcall; external GS_DLL delayed;
+                          user_errors: Integer; out pexit_code: Integer): Integer;
+                          stdcall; external GS_DLL
+                          {$IFDEF DELPHI}delayed{$ENDIF};
 
   {$ifdef __WIN32__}
   function gsapi_run_fileA(instance: Pointer;
                           const file_name: PAnsiChar;
-                          user_errors: Integer; pexit_code: PInteger): Integer;
-                          stdcall; external GS_DLL delayed;
+                          user_errors: Integer; out pexit_code: Integer): Integer;
+                          stdcall; external GS_DLL
+                          {$IFDEF DELPHI}delayed{$ENDIF};
 
   function gsapi_run_fileW(instance: Pointer;
                           const file_name: PAnsiChar;
-                          user_errors: Integer; pexit_code: PInteger): Integer;
-                          stdcall; external GS_DLL delayed;
+                          user_errors: Integer; out pexit_code: Integer): Integer;
+                          stdcall; external GS_DLL
+                          {$IFDEF DELPHI}delayed{$ENDIF};
   {$endif}
 
   /// <summary>
@@ -266,7 +306,7 @@ type
   ///  has been called, and just before gsapi_delete_instance().
   /// </summary>
   function gsapi_exit(instance: Pointer): Integer;
-                      stdcall; external GS_DLL delayed;
+                      stdcall; external GS_DLL {$IFDEF DELPHI}delayed{$ENDIF};
 
   /// <summary>
   ///  gs_spt_parsed allows for a string such as "<< /Foo 0 /Bar true >>" or
@@ -275,7 +315,8 @@ type
   function gsapi_set_param(instance: Pointer;
                            const param: PAnsiChar; const value: Pointer;
                            atype: gs_set_param_type): Integer;
-                           stdcall; external GS_DLL delayed;
+                           stdcall; external GS_DLL
+                           {$IFDEF DELPHI}delayed{$ENDIF};
 
   /// <summary>
   ///  Called to get a value. value points to storage of the appropriate
@@ -290,7 +331,8 @@ type
   function gsapi_get_param(instance: Pointer;
                            const param: PAnsiChar; value: Pointer;
                            atype: gs_set_param_type): Integer;
-                           stdcall; external GS_DLL delayed;
+                           stdcall; external GS_DLL
+                           {$IFDEF DELPHI}delayed{$ENDIF};
 
   /// <summary>
   ///  Enumerator to list all the parameters.
@@ -318,33 +360,39 @@ type
                                   iterator: array of Pointer;
                                   const key: array of PAnsiChar;
                                   atype: gs_set_param_type): Integer;
-                                  stdcall; external GS_DLL delayed;
+                                  stdcall; external GS_DLL
+                                  {$IFDEF DELPHI}delayed{$ENDIF};
 
   /// <summary>
   ///  Add a path to one of the sets of permitted paths.
   /// </summary>
   function gsapi_add_control_path(instance: Pointer;
                                   atype: Integer; const path: PAnsiChar): Integer;
-                                  stdcall; external GS_DLL delayed;
+                                  stdcall; external GS_DLL
+                                  {$IFDEF DELPHI}delayed{$ENDIF};
 
   /// <summary>
   ///  Remove a path from one of the sets of permitted paths.
   /// </summary>
   function gsapi_remove_control_path(instance: Pointer;
                                      atype: Integer; const path: PAnsiChar): Integer;
-                                     stdcall; external GS_DLL delayed;
+                                     stdcall; external GS_DLL
+                                     {$IFDEF DELPHI}delayed{$ENDIF};
 
   /// <summary>
   ///  Purge all the paths from the one of the sets of permitted paths.
   /// </summary>
   procedure gsapi_purge_control_paths(instance: Pointer; atype: Integer);
-                                      stdcall; external GS_DLL delayed;
+                                      stdcall; external GS_DLL
+                                      {$IFDEF DELPHI}delayed{$ENDIF};
 
   procedure gsapi_activate_path_control(instance: Pointer; enable: Integer);
-                                        stdcall; external GS_DLL delayed;
+                                        stdcall; external GS_DLL
+                                        {$IFDEF DELPHI}delayed{$ENDIF};
 
   function gsapi_is_path_control_active(instance: Pointer): Integer;
-                                        stdcall; external GS_DLL delayed;
+                                        stdcall; external GS_DLL
+                                        {$IFDEF DELPHI}delayed{$ENDIF};
 
   //GSDLLEXPORT int GSDLLAPI
   //gsapi_add_fs(void *instance, gsapi_fs_t *fs, void *secret);
