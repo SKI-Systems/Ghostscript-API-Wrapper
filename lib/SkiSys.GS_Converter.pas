@@ -139,7 +139,6 @@ end;
 function TGS_PdfConverter.Convert(const InFiles: array of string;
   OutFile: string; Threaded: Boolean): Boolean;
 var
-  Dir: string;
   AList, FileList: TStringList;
   i: Integer;
 begin
@@ -152,7 +151,6 @@ begin
     AList := TStringList.Create;
     try
       // Expand all Filenames to a Full Path
-      Dir := GetCurrentDir + '\';
       for i := Low(InFiles) to High(InFiles) do
         FileList.Add(InFiles[i]);
       try

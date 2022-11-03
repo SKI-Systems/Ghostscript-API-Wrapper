@@ -42,18 +42,17 @@ uses
   SkiSys.GS_gdevdsp,
 
 {$IFDEF FPC}
-  Classes, SysUtils, Windows, Generics.Collections, Graphics;
-{$ELSE}
-  {$IFDEF DELPHI}
+  Classes, SysUtils, Windows, Graphics, Generics.Collections;
+{$ENDIF}
+{$IFDEF DELPHI}
   System.Classes, System.SysUtils, WinApi.Windows, System.AnsiStrings,
   System.Generics.Collections, Vcl.Graphics;
-  {$ENDIF}
 {$ENDIF}
 
 {$MINENUMSIZE 4}
 
 const
-  API_VERSION = 1001;
+  API_VERSION = 1002;
   /// <summary>
   ///  Minimum required Ghostscript version, which will be checked in
   ///  TGS_Revision.CheckRevision
@@ -84,27 +83,57 @@ type
   protected
     procedure Execute; override;
   public
+    /// <summary>
+    ///  Create the thread and start it
+    /// </summary>
     constructor Create(AApi: TGS_Api; Args: TStrings);
+    // destructor
+    destructor Destroy; override;
   end;
 
   /// <summary>
   ///  Image record to store the image info
   /// </summary>
   TGS_ImageData = record
-    ByteWidth: Integer; //calculated byte width
-    Device: Pointer; //Ghostscript device pointer
-    Format: Cardinal; //display format
-    Height: Integer; //image height
+    /// <summary>
+    ///  Calculated bytes per image line
+    /// </summary>
+    ByteWidth: Integer;
+    /// <summary>
+    ///  Ghostscript device pointer
+    /// </summary>
+    Device: Pointer;
+    /// <summary>
+    ///  The Ghostscript display format, for further informations have a look at
+    ///  the unit SkiSys.GS_gdevdsp
+    /// </summary>
+    Format: Cardinal;
+    /// <summary>
+    ///  Image height
+    /// </summary>
+    Height: Integer;
     /// <summary>
     ///  Pointer to the image data buffer
     /// </summary>
     ImageData: PByte;
-    Raster: Integer; //Ghostscript bytes per image line
-    Width: Integer; //image width
+    /// <summary>
+    ///  Ghostscript bytes per image line
+    /// </summary>
+    Raster: Integer;
+    /// <summary>
+    ///  Image width
+    /// </summary>
+    Width: Integer;
+    /// <summary>
+    ///  Set the values of TGS_ImageData
+    /// </summary>
     procedure SetDataAndSize(Width, Height, Raster: Integer; Format: Cardinal;
                              PImage: PByte);
   end;
 
+  /// <summary>
+  ///  TGS_Image inherits from TBitmap to show a preview image
+  /// </summary>
   TGS_Image = class(TBitmap)
   private
     {$IFDEF DELPHI}[WEAK]{$ENDIF}FDisplay: TGS_Display;
@@ -158,6 +187,9 @@ type
     property GS_Raster: Integer read FGS_Raster;
   end;
 
+  /// <summary>
+  ///  Imagelist for TGS_Image
+  /// </summary>
   TGS_ImageList = class(TObjectList<TGS_Image>)
   private
     FDisplays: TGS_Display;
@@ -181,7 +213,7 @@ type
                              PImage: PByte);
   end;
 
-  //new definition of the events
+{$REGION 'TGS_Display Events Types'}
   TGS_DisplayEvent = function(ADevice: Pointer): Integer of object;
   TGS_DisplayAdjustBandHeightEvent = function(ADevice: Pointer;
                                               ABandHeight: Integer): Integer of object;
@@ -201,6 +233,7 @@ type
                                   AWidth, AHeight, ARaster: Integer;
                                   AFormat: Cardinal; PImage: PByte): Integer of object;
   TGS_DisplayUpdateEvent = function(ADevice: Pointer; X, Y, W, H: Integer): Integer of object;
+{$ENDREGION}
 
   /// <summary>
   ///  The display class to create a preview
@@ -263,10 +296,28 @@ type
     property PageCount: Integer read GetPageCount;
   public (*** EVENTS ***)
     /// <summary>
-    ///
+    ///  When running in “rectangle request mode” the device first renders the
+    ///  page to a display list internally. It can then be played back repeatedly
+    ///  so that different regions (rectangles) of the page can be extracted in
+    ///  sequence. A common use of this is to support “banded” operation, where
+    ///  the page is divided into multiple non-overlapping bands of a fixed height.
+    ///  The display device itself will pick an appropriate band height for it
+    ///  to use. If this function pointer is left as NULL then this value will
+    ///  be used unchanged. Otherwise, the proposed value will be offered to this
+    ///  function. This function can override the choice of bandheight, by
+    ///  returning the value that it would like to be used in preference.
+    ///  In general, this figure should (as much as possible) only be adjusted
+    ///  downwards. For example, a device targeting an inkjet printer with
+    ///  200 nozzles in the print head might like to extract bands that are a
+    ///  multiple of 200 lines high. So the function might
+    ///  return max(200, 200*(bandheight/200)). If the function returns 0,
+    ///  then the existing value will be used unchanged.
+    ///  Any size rectangle can be chosen with any size bandheight, so ultimately
+    ///  the value chosen here will not matter much. It may make some small
+    ///  difference in speed in some cases.
     /// </summary>
-    property OnAdjustBandHeight: TGS_DisplayAdjustBandHeightEvent read FEventAdjustBandHeight
-                                                               write FEventAdjustBandHeight;
+    property OnAdjustBandHeight: TGS_DisplayAdjustBandHeightEvent
+               read FEventAdjustBandHeight write FEventAdjustBandHeight;
     /// <summary>
     ///  Device has been closed.
     /// </summary>
@@ -323,25 +374,71 @@ type
     /// <param name="ARaster">ARaster is byte count of a row.</param>
     property OnPresize: TGS_DisplayPresizeEvent read FEventPresize write FEventPresize;
     /// <summary>
-    ///
+    ///  If the display device chooses to use rectangle request mode, this function
+    ///  will be called repeatedly to request a rectangle to render. Ghostscript
+    ///  will render the rectangle, and call this function again. The implementer
+    ///  is expected to handle the rectangle that has just been rendered, and to
+    ///  return the details of another rectangle to render. This will continue
+    ///  until a rectangle with zero height or width is returned, whereupon
+    ///  Ghostscript will continue operation. <param/>
+    ///  On entry, *raster and *plane_raster are set to the values expected by
+    ///  the format in use. All the other pointers point to uninitialised values. <param/>
+    ///  On exit, the values should be updated appropriately. The implementor is
+    ///  expected to store the values returned so that the rendered output given
+    ///  can be correctly interpreted when control returns to this function.
     /// </summary>
-    property OnRectangleRequest: TGS_DisplayRectangleRequestEvent read FEventRectangleRequest
-                                                               write FEventRectangleRequest;
+    /// <param name="AMemory">
+    ///  should be updated to point to a block of memory to use for the rendered
+    ///  output. Pixel ( *ox, *oy) is the first pixel represented in that block.
+    /// </param>
+    /// <param name="ARaster">
+    ///  is the number of bytes difference between the address of component 0 of
+    ///  Pixel( *ox, *oy) and the address of component 0 of Pixel( *ox, 1+``*oy``).
+    /// </param>
+    /// <param name="APlaneRaster">
+    ///  is the number of bytes difference between the address of component 0 of
+    ///  Pixel( *ox, *oy) and the address of component 1 of Pixel( *ox, *oy), if
+    ///  in planar mode, 0 otherwise. *x, *y, *w and *h give the rectangle
+    ///  requested within that memory block.
+    /// </param>
+    /// <remarks>
+    ///  Any set of rectangles can be rendered with this method, so this can be
+    ///  used to drive Ghostscript in various ways. Firstly, it is simple to
+    ///  request a set of non-overlapping “bands” that cover the page, to drive
+    ///  a printer. Alternatively, rectangles can be chosen to fill a given block
+    ///  of memory to implement a window panning around a larger page. Either the
+    ///  whole image could be redrawn each time, or smaller rectangles around the
+    ///  edge of the panned area could be requested. The choice is down to the caller.
+    /// </remarks>
+    property OnRectangleRequest: TGS_DisplayRectangleRequestEvent
+               read FEventRectangleRequest write FEventRectangleRequest;
     /// <summary>
-    ///
+    ///  When using DISPLAY_COLORS_SEPARATION, this function will be called once
+    ///  for every separation component - first “Cyan”, “Magenta”, “Yellow” and
+    ///  “Black”, then any spot colors used. The supplied c, m, y and k values
+    ///  give the equivalent color for each spot. Each colorant value ranges
+    ///  from 0 (for none) to 65535 (full).
+    ///  In separation color mode you are expected to count the number of calls
+    ///  you get to this function after each display_size to know how many colors
+    ///  you are dealing with.
     /// </summary>
-    property OnSeparation: TGS_DisplaySeparationEvent read FEventSeparation write FEventSeparation;
+    property OnSeparation: TGS_DisplaySeparationEvent read FEventSeparation
+                                                      write FEventSeparation;
     /// <summary>
     ///  Device has been resized.
     ///  New pointer to raster returned in pimage
     /// </summary>
     property OnSize: TGS_DisplaySizeEvent read FEventSize write FEventSize;
     /// <summary>
-    ///
+    ///  This function may be called periodically during display to flush the
+    ///  page to the display.
     /// </summary>
     property OnSync: TGS_DisplayEvent read FEventSync write FEventSync;
     /// <summary>
-    ///
+    ///  This function may get called repeatedly during rendering to indicate
+    ///  that an area of the output has been updated. Certain types of rendering
+    ///  will not see this function called back at all
+    ///  (in particular files using transparency).
     /// </summary>
     property OnUpdate: TGS_DisplayUpdateEvent read FEventUpdate write FEventUpdate;
   public (*** METHODS ***)
@@ -405,6 +502,7 @@ type
   private
     FArgumentEncoding: GS_ARG_ENCODING;
     FDebug: Boolean;
+    FDebugLastCmdArgs: string;
     FDebugParams: TGSDebugParams;
     FDebugShowCmdArgs: Boolean;
     FDefaultDeviceList: TStringList;
@@ -442,11 +540,11 @@ type
     FLogStdIn: TStringList;  // log StdIn
     FLogStdOut: TStringList; // log StdOut
     /// <summary>
-    ///  Call event OnAfterExecute
+    ///  Call event <see cref="SkiSys.GS_Api|TGS_Api.OnAfterExecute"/>
     /// </summary>
     procedure AfterExecute; virtual;
     /// <summary>
-    ///  Call event OnAfterInitWithArgs
+    ///  Call event <see cref="SkiSys.GS_Api|TGS_Api.OnAfterInitWithArgs"/>
     /// </summary>
     procedure AfterInitWithArgs; virtual;
     /// <summary>
@@ -509,9 +607,13 @@ type
     function InitWithArgs(AArgs: PArgv): Boolean; overload; virtual;
     /// <summary>
     ///  The callback function for polling. See full description at the event
-    ///  <see cref="OnPoll"/>
+    ///  <see cref="SkiSys.GS_Api|TGS_Api.OnPoll"/>
     /// </summary>
     function Poll: Integer; virtual;
+    /// <summary>
+    ///  check the param for whitespaces and set quotes if needed
+    /// </summary>
+    function QuoteCmdParameter(const AParam: string): string;
     /// <summary>
     ///  Set the default values of the class
     /// </summary>
@@ -541,7 +643,7 @@ type
     /// </summary>
     procedure StdIn(AText: string); virtual;
     /// <summary>
-    ///  Set the StdOut and filter some informations and call the OnStdOut Event
+    ///  Set the StdOut, filter some informations and call the OnStdOut Event
     /// </summary>
     procedure StdOut(AText: string); virtual;
     /// <summary>
@@ -569,6 +671,10 @@ type
     /// </summary>
     property Debug: Boolean read FDebug write FDebug;
     /// <summary>
+    ///  Get the last command line arguments
+    /// </summary>
+    property DebugLastCmdArgs: string read FDebugLastCmdArgs;
+    /// <summary>
     ///  Ghostscript Debug Parameters
     /// </summary>
     property DebugParams: TGSDebugParams read FDebugParams write FDebugParams;
@@ -578,7 +684,7 @@ type
     property DebugShowCmdArgs: Boolean read FDebugShowCmdArgs
                                        write FDebugShowCmdArgs;
     /// <summary>
-    ///  Get's and Sets a DefaultDevice list in Ghostscript
+    ///  Get's and Sets a DefaultDevice list for Ghostscript
     /// </summary>
     property DefaultDeviceList: TStrings read GetDefaultDeviceList
                                          write SetDefaultDeviceList;
@@ -602,8 +708,7 @@ type
     /// <summary>
     ///  Can be used to turn off the automatic Exit(gsapi_exit) call after
     ///  InitWithArgs, but you have to call Exit by your self. A saver method
-    ///  is to use the OnAfterInitWithArgs event, which is executed after
-    ///  InitWithArgs and before Exit.
+    ///  is to use the event <see cref="SkiSys.GS_Api|TGS_Api.OnAfterInitWithArgs"/>.
     /// </summary>
     property NoExit: Boolean read FNoExit write FNoExit;
     /// <summary>
@@ -613,7 +718,7 @@ type
                                           write FEventAfterExecute;
     /// <summary>
     ///  The event will be called after InitWithArgs and before Exit.
-    ///  You can use it to perform RunString* operations.
+    ///  You can use it to perform Run* operations.
     /// </summary>
     property OnAfterInitWithArgs: TNotifyEvent read FEventAfterInitWithArgs
                                                write FEventAfterInitWithArgs;
@@ -670,7 +775,7 @@ type
     /// </summary>
     destructor Destroy; override;
     /// <summary>
-    ///  call gsapi_exit
+    ///  call <see cref="SkiSys.GS_Dll|gsapi_exit" />
     /// </summary>
     procedure Exit; virtual;
     /// <summary>
@@ -693,7 +798,7 @@ type
     /// <remarks>
     ///  All Run* operations should be called after InitWidthArgs and before Exit.
     ///  For this operations you have to set NoExit to true and to call Exit by
-    ///  your self.
+    ///  your self or use the event <see cref="SkiSys.GS_Api|TGS_Api.OnAfterInitWithArgs"/>
     /// </remarks>
     function RunFile(AFile: string; AUserErrors: Integer; out AExitCode: Integer): Integer;
     /// <summary>
@@ -702,7 +807,7 @@ type
     /// <remarks>
     ///  All Run* operations should be called after InitWidthArgs and before Exit.
     ///  For this operations you have to set NoExit to true and to call Exit by
-    ///  your self.
+    ///  your self or use the event <see cref="SkiSys.GS_Api|TGS_Api.OnAfterInitWithArgs"/>
     /// </remarks>
     function RunString(AStr: string; AUserErrors: Integer; out AExitCode: Integer): Integer;
     /// <summary>
@@ -714,7 +819,7 @@ type
     /// <remarks>
     ///  All Run* operations should be called after InitWidthArgs and before Exit.
     ///  For this operations you have to set NoExit to true and to call Exit by
-    ///  your self.
+    ///  your self or use the event <see cref="SkiSys.GS_Api|TGS_Api.OnAfterInitWithArgs"/>
     /// </remarks>
     function RunStringBegin(AUserErrors: Integer; out AExitCode: Integer): Integer;
     /// <summary>
@@ -724,7 +829,7 @@ type
     /// <remarks>
     ///  All Run* operations should be called after InitWidthArgs and before Exit.
     ///  For this operations you have to set NoExit to true and to call Exit by
-    ///  your self.
+    ///  your self or use the event <see cref="SkiSys.GS_Api|TGS_Api.OnAfterInitWithArgs"/>
     /// </remarks>
     function RunStringContinue(AStr: string; ALength: Cardinal;
                                AUserErrors: Integer; out AExitCode: Integer): Integer;
@@ -736,7 +841,7 @@ type
     /// <remarks>
     ///  All Run* operations should be called after InitWidthArgs and before Exit.
     ///  For this operations you have to set NoExit to true and to call Exit by
-    ///  your self.
+    ///  your self or use the event <see cref="SkiSys.GS_Api|TGS_Api.OnAfterInitWithArgs"/>
     /// </remarks>
     function RunStringEnd(AUserErrors: Integer; out AExitCode: Integer): Integer;
     /// <summary>
@@ -746,11 +851,21 @@ type
     /// <remarks>
     ///  All Run* operations should be called after InitWidthArgs and before Exit.
     ///  For this operations you have to set NoExit to true and to call Exit by
-    ///  your self.
+    ///  your self or use the event <see cref="SkiSys.GS_Api|TGS_Api.OnAfterInitWithArgs"/>
     /// </remarks>
     function RunStringWithLength(AStr: string; ALength: Cardinal;
                                  AUserErrors: Integer; out AExitCode: Integer): Integer;
   end;
+
+{$IFDEF FPC}
+  {$IFDEF MSWINDOWS}
+  /// <summary>
+  ///  Adds a directory to the search path used to locate DLLs for the application.
+  /// </summary>
+  function SetDllDirectory(lpPathName: LPCTSTR): LongBool; stdcall;
+             external 'kernel32.dll' name 'SetDllDirectoryW';
+  {$ENDIF}
+{$ENDIF}
 
 implementation
 
@@ -804,7 +919,7 @@ begin
 
   StrPCopy(ABuffer, Text);
   AApi.StdIn(string(Text));
-  Result := Length(Text);
+  Result := ALen;
 end;
 
 function GSStdOut(ACaller: Pointer; const ABuffer: PAnsiChar;
@@ -1132,10 +1247,11 @@ begin
     if (FDllPath[length(FDllPath)-1] <> '\') then
       FDllPath := FDllPath + '\';
     ADllFile := FDllPath + GS_DLL;
-    {$IFDEF DELPHI}SetDllDirectory(PChar(FDllPath));{$ENDIF}
+    {$IFDEF MSWINDOWS}
+    SetDllDirectory(PChar(FDllPath));
+    {$ENDIF}
   end else
     ADllFile := ExpandFileName(ADllFile);
-
 
   if (not FileExists(ADllFile)) then
     raise Exception.CreateFmt('couldn''t find the Ghostscript Dll at %s', [ADllFile]);
@@ -1208,6 +1324,25 @@ begin
     Result := FEventPoll(Self);
 end;
 
+function TGS_Api.QuoteCmdParameter(const AParam: string): string;
+var
+  AValues: TArray<string>;
+begin
+  Result := AParam;
+  if (Result.Contains(' ')) then
+  begin
+    if (Result.Contains('=')) then
+    begin
+      AValues := Result.Split(['=']);
+      Result := AValues[0] + '=' + AValues[1].QuotedString('"');
+    end else
+    if (not Result.StartsWith('-')) then // quote a filename
+    begin
+      Result := Result.QuotedString('"');
+    end;
+  end;
+end;
+
 function TGS_Api.InitWithArgs(AStrings: TStrings): Boolean;
 var
   AAnsiStrs: TAnsiStringArray;
@@ -1216,46 +1351,44 @@ var
   i: Integer;
 begin
   Result := False;
-  try
-    if (AStrings <> nil) and (AStrings.Count > 0) then
+  if (AStrings <> nil) and (AStrings.Count > 0) then
+  begin
+    if (Debug) then
     begin
-      if (Debug) then
+      ACmdArgs := GS_CMD_EXE;
+      StdOutLine('---  Debug Init Parameters  ---');
+      for i := 0 to AStrings.Count - 1 do
       begin
-        ACmdArgs := GS_EXE;
-        StdOutLine('---  Debug Init Parameters  ---');
-        for i := 0 to AStrings.Count - 1 do
-        begin
-          StdOutLine('SetParam: ' + AStrings[i]);
-          ACmdArgs := ACmdArgs + ' ' + AStrings[i];
-        end;
-        StdOutLine('--- END ---');
+        StdOutLine('SetParam: ' + AStrings[i]);
+        // check the arguments for whitspaces
+        ACmdArgs := ACmdArgs + ' ' + QuoteCmdParameter(AStrings[i]);
       end;
-      if (DebugShowCmdArgs) then
-      begin
-        StdOutLine('--- CMD Args ---');
-        //TODO: Some output might be corrupted, because of whitespaces
-        StdOutLine(ACmdArgs);
-        StdOutLine('--- CMD Args END ---');
-      end;
+      StdOutLine('--- END ---');
+    end;
+    if (DebugShowCmdArgs) then
+    begin
+      StdOutLine('--- CMD Args ---');
+      StdOutLine(ACmdArgs);
+      StdOutLine('--- CMD Args END ---');
+    end;
 
-      AAnsiStrs := GetAnsiStrArray(AStrings);
-      AArgs := GetPAnsiCharArray(AAnsiStrs);
-      Result := InitWithArgs(AArgs);
-      if (not Self.FThreadUsed) then
-        ThreadFinished(Self);
-    end else
-      raise Exception.Create('InitWithArgs: No parameters set, operation canceled');
-  finally
-    FThreadUsed := False;
-  end;
+    AAnsiStrs := GetAnsiStrArray(AStrings);
+    AArgs := GetPAnsiCharArray(AAnsiStrs);
+    Result := InitWithArgs(AArgs);
+    if (not Self.FThreadUsed) then
+      ThreadFinished(Self);
+  end else
+    raise Exception.Create('InitWithArgs: No parameters set, operation canceled');
 end;
 
 procedure TGS_Api.InitWithArgsStart(AStrings: TStrings);
 begin
   // only 1 thread can run at a time
-  Self.FThreadRunning := True;
-  Self.FThreadUsed := True;
-  TGS_ApiThread.Create(Self, AStrings);
+  if (not FThreadUsed) then
+  begin
+    Self.FThreadUsed := True;
+    TGS_ApiThread.Create(Self, AStrings);
+  end;
 end;
 
 function TGS_Api.IsError(AResult: Integer; AError: gs_error_type): Boolean;
@@ -1280,7 +1413,7 @@ begin
   begin
     Result := CheckRunResult(gsapi_run_string(FInstance, PAnsiChar(AnsiString(AStr)),
                                               AUserErrors, AExitCode));
-    if (Result < 0) and not (Result = Integer(gs_error_Quit)) then
+    if (Result < 0) then
       FLastErrorCode := Result;
   end;
 end;
@@ -1533,22 +1666,32 @@ end;
 
 constructor TGS_ApiThread.Create(AApi: TGS_Api; Args: TStrings);
 begin
-  Self.FreeOnTerminate := True;
-  Self.FApi := AApi;
-  Self.FArgs := Args;
-  Self.OnTerminate := AApi.ThreadFinished;
+  FreeOnTerminate := True;
+  FApi := AApi;
+  FArgs := Args;
+  OnTerminate := AApi.ThreadFinished;
   inherited Create(False);
+end;
+
+destructor TGS_ApiThread.Destroy;
+begin
+  if (FArgs <> nil) then
+    FreeAndNil(FArgs);
+  FApi.FThreadRunning := False;
+  FApi.FThreadUsed := False;
+  inherited Destroy;
 end;
 
 procedure TGS_ApiThread.Execute;
 begin
+  FApi.FThreadRunning := True;
   if (not Terminated) then
   begin
     try
       FApi.InitWithArgs(FArgs);
-    finally
-      // free the ArgumentList
-      FreeAndNil(FArgs);
+    except
+      on E: Exception do
+        FApi.SetLastError('Error on TGS_ApiThread.Execute: ' + E.Message);
     end;
   end;
 end;
@@ -1961,7 +2104,7 @@ begin
         // at the last row and end at the first row
         Row := FBmpInfoHeader.biHeight - 1 - i;
         // copy the image data buffer to the bitmap memory
-        CopyMemory(DestBytes, PImage + AByteWidth * Row, AByteWidth);
+        CopyMemory(DestBytes, PImage + AByteWidth * Row, FByteWidth);
         // convert if needed
         ConvertImageDataLine(DestBytes);
       end;

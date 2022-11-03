@@ -9,9 +9,21 @@
 - Execution of an operation in a single thread
 - Output of debug informations from the wrapper and the Ghostscript library
 - Supports 32-Bit and 64-Bit Windows applications
-- Example application
+- Example applications for Delphi and Lazarus
+
+### Ghostscript 
+
+At the following links you can find the [website](https://www.ghostscript.com) and [documentation](https://ghostscript.readthedocs.io) of Ghostscript.
+![Ghostscript Icon](https://gdm-catalog-fmapi-prod.imgix.net/ProductScreenshot/fdea9f1c-d655-48a3-bb5a-4c51815bb294.png) 
+
 
 ### CHANGELOG
+
+#### version 1.00.2 (FPC and Delphi Win32/64)
+- added example for Lazarus/FPC and changed folders of the examples
+- improved internal documentation
+- fixed an issue on creating the image preview 64-Bit
+- fixed an issue with threads in the examples
 
 #### version 1.00.1 (FPC and Delphi Win32/64)
 - FPC/Lazarus support
