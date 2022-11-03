@@ -1,0 +1,15 @@
+﻿[OpenDialog]
+Coordinates=10,146,72,51
+Visible=True
+ExplicitSubNodes=FileName
+
+[]
+Coordinates=105,10,59,51
+Visible=True
+LayerNames=NewLayer0
+
+[Module Settings]
+ModelLayerNames=NewLayer0
+ActiveLayerNames=NewLayer0
+EditingLayerName=NewLayer0
+

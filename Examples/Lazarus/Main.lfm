@@ -1,0 +1,195 @@
+object FMain: TFMain
+  Left = 575
+  Height = 620
+  Top = 181
+  Width = 760
+  Anchors = [akTop, akLeft, akRight, akBottom]
+  Caption = 'Ghostscript API Example'
+  ClientHeight = 620
+  ClientWidth = 760
+  Color = clBtnFace
+  Font.Color = clWindowText
+  Font.Height = -11
+  Font.Name = 'Tahoma'
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  LCLVersion = '2.2.4.0'
+  object Pages: TPageControl
+    Left = 0
+    Height = 620
+    Top = 0
+    Width = 760
+    ActivePage = Tab_Operation
+    Align = alClient
+    TabIndex = 0
+    TabOrder = 0
+    object Tab_Operation: TTabSheet
+      Caption = 'Convert'
+      ClientHeight = 594
+      ClientWidth = 752
+      object SBtn_OpenFile: TSpeedButton
+        Left = 711
+        Height = 21
+        Top = 9
+        Width = 23
+        Anchors = [akTop, akRight]
+        Caption = '...'
+        OnClick = SBtn_OpenFileClick
+      end
+      object BBtn_Test: TBitBtn
+        Left = 8
+        Height = 25
+        Top = 42
+        Width = 75
+        Caption = 'Convert'
+        OnClick = BBtn_TestClick
+        TabOrder = 0
+      end
+      object LEd_PdfFile: TLabeledEdit
+        Left = 32
+        Height = 21
+        Top = 10
+        Width = 673
+        Anchors = [akTop, akLeft, akRight]
+        EditLabel.Height = 13
+        EditLabel.Width = 20
+        EditLabel.Caption = 'File:'
+        EditLabel.ParentColor = False
+        LabelPosition = lpLeft
+        TabOrder = 1
+      end
+      object M_UserParams: TMemo
+        Left = 8
+        Height = 129
+        Hint = 'You can insert here Ghostscrip Userparams'
+        Top = 83
+        Width = 736
+        Anchors = [akTop, akLeft, akRight]
+        ParentShowHint = False
+        ScrollBars = ssVertical
+        ShowHint = True
+        TabOrder = 2
+      end
+      object M_Output: TMemo
+        Left = 8
+        Height = 222
+        Hint = 'Shows the Ghostscript Standard output'
+        Top = 216
+        Width = 736
+        Anchors = [akTop, akLeft, akRight, akBottom]
+        ParentShowHint = False
+        ReadOnly = True
+        ScrollBars = ssVertical
+        ShowHint = True
+        TabOrder = 3
+      end
+      object M_Errors: TMemo
+        Left = 8
+        Height = 122
+        Hint = 'Shows the Errors'
+        Top = 444
+        Width = 736
+        Anchors = [akLeft, akRight, akBottom]
+        ParentShowHint = False
+        ReadOnly = True
+        ScrollBars = ssVertical
+        ShowHint = True
+        TabOrder = 4
+      end
+      object RGrp_Devices: TRadioGroup
+        Left = 89
+        Height = 40
+        Top = 34
+        Width = 616
+        Anchors = [akTop, akLeft, akRight]
+        AutoFill = True
+        Caption = 'Convert Device'
+        ChildSizing.LeftRightSpacing = 6
+        ChildSizing.EnlargeHorizontal = crsHomogenousChildResize
+        ChildSizing.EnlargeVertical = crsHomogenousChildResize
+        ChildSizing.ShrinkHorizontal = crsScaleChilds
+        ChildSizing.ShrinkVertical = crsScaleChilds
+        ChildSizing.Layout = cclLeftToRightThenTopToBottom
+        ChildSizing.ControlsPerLine = 5
+        ClientHeight = 22
+        ClientWidth = 612
+        Columns = 5
+        ItemIndex = 0
+        Items.Strings = (
+          'Display PDF'
+          'Display PDF-A'
+          'PDF'
+          'PDF-A'
+        )
+        TabOrder = 5
+      end
+    end
+    object Tab_PDFView: TTabSheet
+      Caption = 'PDF Preview'
+      ClientHeight = 594
+      ClientWidth = 752
+      ImageIndex = 1
+      object P_PDF_Top: TPanel
+        Left = 0
+        Height = 41
+        Top = 0
+        Width = 752
+        Align = alTop
+        BevelOuter = bvNone
+        ClientHeight = 41
+        ClientWidth = 752
+        TabOrder = 0
+        object UpDown_Pages: TUpDown
+          Left = 239
+          Height = 24
+          Top = 6
+          Width = 17
+          Min = 0
+          OnClick = UpDown_PagesClick
+          Position = 0
+          TabOrder = 0
+        end
+        object LEd_PageCount: TLabeledEdit
+          Left = 202
+          Height = 13
+          Top = 12
+          Width = 30
+          Alignment = taRightJustify
+          BorderStyle = bsNone
+          EditLabel.Height = 13
+          EditLabel.Width = 37
+          EditLabel.Caption = 'Seiten: '
+          EditLabel.ParentColor = False
+          LabelPosition = lpLeft
+          ReadOnly = True
+          TabOrder = 1
+          Text = '0/0'
+        end
+      end
+      object ScrollBoxImage: TScrollBox
+        Left = 0
+        Height = 553
+        Top = 41
+        Width = 752
+        HorzScrollBar.Page = 741
+        VertScrollBar.Page = 452
+        Align = alClient
+        ClientHeight = 549
+        ClientWidth = 748
+        TabOrder = 1
+        object Img_Page: TImage
+          Left = 0
+          Height = 452
+          Top = 0
+          Width = 741
+          AutoSize = True
+        end
+      end
+    end
+  end
+  object OpenDialog: TOpenDialog
+    Filter = 'PDF-Datei (*.pdf)|*.pdf|Alle Dateien (*.*)|*.*'
+    Left = 424
+    Top = 128
+  end
+end
