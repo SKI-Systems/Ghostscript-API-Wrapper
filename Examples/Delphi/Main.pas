@@ -135,7 +135,7 @@ end;
 
 function TFMain.GetOutputDir(ADir, AName: string): string;
 begin
-  Result := ADir + AName + '\';
+  Result := ADir + AName + PathDelim;
   if (not DirectoryExists(Result)) then
     CreateDir(Result);
 end;
@@ -233,8 +233,12 @@ begin
     if (not FileExists(AFile)) then
       raise EFileNotFoundException.CreateFmt('The file: %s does not exist', [AFile]);
 
-    ADir := ExtractFilePath(ParamStr(0)) + '\';
-    AProfileDir := ICCProfileDir + '\';
+    ADir := ExtractFilePath(ParamStr(0));
+    if (not ADir.EndsWith(PathDelim)) then
+      ADir := ADir + PathDelim;
+    AProfileDir := ICCProfileDir + PathDelim;
+    if (not AProfileDir.EndsWith(PathDelim)) then
+      AProfileDir := AProfileDir + PathDelim;
 
     PDFConvert.OnAfterExecute := ThreadFinished;
 
@@ -246,7 +250,6 @@ begin
     // shows the used parameters as cmd args (quotes included)
     PDFConvert.DebugShowCmdArgs := True;
     // shows the communictaion of Ghosscript with API, if you use
-    // PDFConvert.Params.Device = 'display';
     PDFConvert.GSDisplay.Debug := True;
 
     // debug options for Ghostscript

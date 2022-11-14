@@ -39,10 +39,17 @@ interface
 
 uses
   SkiSys.GS_Dll, SkiSys.GS_Types, SkiSys.GS_Errors, SkiSys.GS_ParameterTypes,
-  SkiSys.GS_gdevdsp,
+  SkiSys.GS_ParameterConst, SkiSys.GS_gdevdsp,
 
 {$IFDEF FPC}
-  Classes, SysUtils, Windows, Graphics, Generics.Collections;
+  Classes, SysUtils, Graphics, Generics.Collections, LclIntf, LclType, GraphType
+  {$IFDEF MSWINDOWS}
+  , Windows
+  {$ENDIF}
+  {$IFDEF UNIX}
+  , Unix
+  {$ENDIF}
+  ;
 {$ENDIF}
 {$IFDEF DELPHI}
   System.Classes, System.SysUtils, WinApi.Windows, System.AnsiStrings,
@@ -50,15 +57,18 @@ uses
 {$ENDIF}
 
 {$MINENUMSIZE 4}
+{$I+}
 
 const
-  API_VERSION = 1002;
+  /// <summary>
+  ///  The TGS_Api version
+  /// </summary>
+  API_VERSION = 1010;
   /// <summary>
   ///  Minimum required Ghostscript version, which will be checked in
-  ///  TGS_Revision.CheckRevision
+  ///  <see cref="SkiSys.GS_API|TGS_Revision.CheckRevision"/>
   /// </summary>
   MIN_GHOSTSCRIPT_REVISION = 9500;
-
 
 type
   TAnsiStringArray = array of AnsiString;
@@ -70,8 +80,49 @@ type
   /// </summary>
   EInvalidGhostscriptVersionException = Exception;
 
+
+  { EGS_ApiException }
+
+  /// <summary>
+  ///  Exceptions raised by the TGS_Api
+  /// </summary>
+  EGS_ApiException = class(Exception)
+  private
+    const
+      // <1>ErrorCode , <2>FunctionName , <3>ErrorMessage
+      MessageFunctionFmt = 'Error(%d) on %s: %s';
+      MessageErrorCodeFmt = 'Error(%d) %s';
+  protected
+    FErrorCode: Integer;
+    FFunctionName: string;
+    FInternalMessage: string;
+    function GetMessage(AValue: string): string;
+  public
+    constructor Create(const Msg, AFunctionName: string; error: Integer); reintroduce;
+    constructor CreateFmt(const Msg, AFunctionName: string; error: Integer;
+                          const Args: array of const); reintroduce;
+  end;
+
   TGS_Api = class;
   TGS_Display = class;
+
+  { TStrSyncObject }
+
+  /// <summary>
+  ///  Object to synchronize a TGSEvent_Std
+  /// </summary>
+  TStrSyncObject = class
+  private
+    FEvent: TGSEvent_Std;
+    FStr: string;
+  public
+    // constructor
+    constructor Create(AEvent: TGSEvent_Std; AStr: string);
+    /// <summary>
+    ///  Method to execute the event synchronized
+    /// </summary>
+    procedure Execute;
+  end;
 
   /// <summary>
   ///  Thread to run InitWithArgs as a thread with the arguments
@@ -131,27 +182,58 @@ type
                              PImage: PByte);
   end;
 
+  { TGS_Image }
+
   /// <summary>
   ///  TGS_Image inherits from TBitmap to show a preview image
   /// </summary>
-  TGS_Image = class(TBitmap)
+  TGS_Image = class({$IFDEF FPC}Graphics.{$ENDIF}TBitmap)
   private
     {$IFDEF DELPHI}[WEAK]{$ENDIF}FDisplay: TGS_Display;
     FBmpInfoHeader: BITMAPINFOHEADER;
-    FByteWidth: Integer;
+    FBitsPerPixel: Integer;
     FGS_Device: Pointer;
-    FGS_Format: Cardinal;
+    FGS_Format: TGSDisplayFormat;
     FGS_ImageDataLoaded: Boolean;
-    FGS_Raster: Integer;
+    FGS_Raster: Integer; // GS BytesPerScanLine
+    function GetGS_Format: Cardinal;
   protected
     /// <summary>
     ///  Converts the image data if needed
     /// </summary>
-    procedure ConvertImageDataLine(ADataLine: Pointer); virtual;
+    function ConvertImageDataLine(ASrcLine, ADestLine: PByte): Boolean; virtual;
     /// <summary>
-    ///  Get the PixelFormat from the BITMAPINFOHEADER
+    ///  convert data bytes from the native 555 format
     /// </summary>
-    function GetPixelFormatFromBMIH: TPixelFormat; virtual;
+    procedure ConvertNative555(ASrcBytes, ADestBytes: PByte); virtual;
+    /// <summary>
+    ///  convert data bytes from the native 565 format
+    /// </summary>
+    procedure ConvertNative565(ASrcBytes, ADestBytes: PByte); virtual;
+    /// <summary>
+    ///  calculate the bytes
+    /// </summary>
+    function GetBytesPerLine: Integer; virtual;
+    /// <summary>
+    ///  calculate the bits per pixel for our formats
+    /// </summary>
+    function GetBitsPerPixel: Integer; virtual;
+    /// <summary>
+    ///  get the gray colors from normal colors
+    /// </summary>
+    function GetGrayLuminance(AColor: TColor; const ALum: array of Byte): TColor;
+    /// <summary>
+    ///  get the pointer to the image data line
+    /// </summary>
+    function GetScanLine(AIndex: Integer): Pointer;
+    /// <summary>
+    ///  Get the PixelFormat
+    /// </summary>
+    function GetPixelFormatFromBits: TPixelFormat; virtual;
+    /// <summary>
+    ///  Calls the Move method
+    /// </summary>
+    procedure MemCopy(Source, Dest: Pointer; ALength: Integer);
     /// <summary>
     ///  Set the BmpInfoHeader from the format
     /// </summary>
@@ -176,7 +258,7 @@ type
     /// <summary>
     ///  The Ghostscript display format implemented in the unit SkiSys.GS_gdevdsp
     /// </summary>
-    property GS_Format: Cardinal read FGS_Format;
+    property GS_Format: Cardinal read GetGS_Format;
     /// <summary>
     ///  Is the image buffer loaded into the bitmap
     /// </summary>
@@ -198,19 +280,19 @@ type
     /// <summary>
     ///  Create the image from the ImageData and add it to the list
     /// </summary>
-    function AddFromImageData: Integer;
+    function AddFromImageData: Integer; virtual;
     // constructor
     constructor Create(ADisplays: TGS_Display);
     /// <summary>
     ///  Initialize the ImgaeData when the device is open
     /// </summary>
-    procedure InitImageData(ADevice: Pointer);
+    procedure InitImageData(ADevice: Pointer); virtual;
     /// <summary>
     ///  Set the size and the buffer pointer for the image buffer. The image
     ///  buffer isn't filled at this moment.
     /// </summary>
     procedure SetDataAndSize(AWidth, AHeight, ARaster: Integer; AFormat: Cardinal;
-                             PImage: PByte);
+                             PImage: PByte); virtual;
   end;
 
 {$REGION 'TGS_Display Events Types'}
@@ -261,29 +343,80 @@ type
     ///  Preview ImageList will be filled when the parameter -sDEVICE=display is set
     /// </summary>
     FImageList: TGS_ImageList;
+    /// <summary>
+    ///  write a message to std_out, when Debug is true
+    /// </summary>
     procedure DebugLog(AMessage: string); overload;
+    /// <summary>
+    ///  write a message in the format to std_out, when Debug is true
+    /// </summary>
     procedure DebugLogFmt(AFormat: string; const Args: array of const); overload;
+    /// <summary>
+    ///  see description <see cref="SkiSys.GS_Api|TGS_Display.OnAdjustBandHeight" />
+    /// </summary>
     function EventAdjustBandHeight(ADevice: Pointer; ABandHeight: Integer): Integer; virtual;
+    /// <summary>
+    ///  see description <see cref="SkiSys.GS_Api|TGS_Display.OnClose"/>
+    /// </summary>
     function EventClose(ADevice: Pointer): Integer; virtual;
+    /// <summary>
+    ///  see description <see cref="SkiSys.GS_Api|TGS_Display.OnMemAlloc"/>
+    /// </summary>
     procedure EventMemAlloc(ADevice: Pointer; ASize: SIZE_T); virtual;
+    /// <summary>
+    ///  see description <see cref="SkiSys.GS_Api|TGS_Display.OnMemFree"/>
+    /// </summary>
     function EventMemFree(ADevice, AMem: Pointer): Integer; virtual;
+    /// <summary>
+    ///  see description <see cref="SkiSys.GS_Api|TGS_Display.OnOpen"/>
+    /// </summary>
     function EventOpen(ADevice: Pointer): Integer; virtual;
+    /// <summary>
+    ///  see description <see cref="SkiSys.GS_Api|TGS_Display.OnPage"/>
+    /// </summary>
     function EventPage(ADevice: Pointer; ACopies, AFlush: Integer): Integer; virtual;
+    /// <summary>
+    ///  see description <see cref="SkiSys.GS_Api|TGS_Display.OnPreclose"/>
+    /// </summary>
     function EventPreclose(ADevice: Pointer): Integer; virtual;
+    /// <summary>
+    ///  see description <see cref="SkiSys.GS_Api|TGS_Display.OnPresize"/>
+    /// </summary>
     function EventPresize(ADevice: Pointer;
                           AWidth, AHeight, ARaster: Integer;
                           AFormat: Cardinal): Integer; virtual;
+    /// <summary>
+    ///  see description <see cref="SkiSys.GS_Api|TGS_Display.OnRectangleRequest"/>
+    /// </summary>
     function EventRectangleRequest(ADevice, AMemory: Pointer;
                                    out ARaster, APlaneRaster: Integer;
                                    out X, Y, W, H: Integer): Integer; virtual;
+    /// <summary>
+    ///  see description <see cref="SkiSys.GS_Api|TGS_Display.OnSeparation"/>
+    /// </summary>
     function EventSeparation(ADevice: Pointer; AComponent: Integer;
                              AComponentName: PAnsiChar; C, M, Y, K: Word): Integer; virtual;
+    /// <summary>
+    ///  see description <see cref="SkiSys.GS_Api|TGS_Display.OnSize"/>
+    /// </summary>
     function EventSize(ADevice: Pointer;
                        AWidth, AHeight, ARaster: Integer;
                        AFormat: Cardinal; PImage: PByte): Integer; virtual;
+    /// <summary>
+    ///  see description <see cref="SkiSys.GS_Api|TGS_Display.OnSync"/>
+    /// </summary>
     function EventSync(ADevice: Pointer): Integer; virtual;
+    /// <summary>
+    ///  see description <see cref="SkiSys.GS_Api|TGS_Display.OnUpdate"/>
+    /// </summary>
     function EventUpdate(ADevice: Pointer; X, Y, W, H: Integer): Integer; virtual;
+    /// <summary>
+    ///  get the count of pages
+    /// </summary>
     function GetPageCount: Integer; virtual;
+    /// <summary>
+    ///  initialize the object
+    /// </summary>
     procedure Init(AApi: TGS_Api); virtual;
   public (*** PROPERTIES ***)
     /// <summary>
@@ -467,16 +600,37 @@ type
   TGS_Revision = class
   private
     {$IFDEF DELPHI}[WEAK]{$ENDIF}FApi: TGS_API;
-  public
-    Product: string;
-    Copyright: string;
-    Revision: LongInt;
-    RevisionStr: string;
-    RevisionDate: LongInt;
+    FCopyright: string;
+    FProduct: string;
+    FRevision: Integer;
+    FRevisionStr: string;
+    FRevisionDate: Integer;
+  protected (*** PROTECTED METHODS ***)
     /// <summary>
     ///  Fills the RevisionStr after GetRevision is called
     /// </summary>
     function GetRevisonStr: string; virtual;
+  public (*** PUBLIC PROPERTIES ***)
+    /// <summary>
+    ///  The product string of Ghostscript
+    /// </summary>
+    property Product: string read FProduct;
+    /// <summary>
+    ///  The copyright of Ghostscript
+    /// </summary>
+    property Copyright: string read FCopyright;
+    /// <summary>
+    ///  Revison as an integer
+    /// </summary>
+    property Revision: Integer read FRevision;
+    /// <summary>
+    ///  Revision as a string
+    /// </summary>
+    property RevisionStr: string read FRevisionStr;
+    /// <summary>
+    ///  Revison date as an integer in the format yyyymmdd
+    /// </summary>
+    property RevisionDate: Integer read FRevisionDate;
   public (*** PUBLIC METHODS ***)
     /// <summary>
     ///  create the object and read the revision data from the dll
@@ -494,6 +648,8 @@ type
     /// </summary>
     procedure GetRevision(AApi: TGS_API); virtual;
   end;
+
+  { TGS_Api }
 
   /// <summary>
   ///  Base API to use the Ghostscript dll functions
@@ -519,14 +675,17 @@ type
     FLastError: string;
     FLastErrors: TStringList; // list of errors occured during the process
     FLastErrorCode: Integer;
+    FLogStdIn: TStringList;  // log StdIn
+    FLogStdOut: TStringList; // log StdOut
     FNoExit: Boolean;
     FRevision: TGS_Revision;
-    FThreadRunning: Boolean;
+    FThread: TGS_ApiThread;
     FThreadUsed: Boolean;
     function GetDefaultDeviceList: TStrings;
     function GetLastErrors: string;
     function GetLogStdIn: TStrings;
     function GetLogStdOut: TStrings;
+    function GetThreadRunning: Boolean;
     /// <summary>
     ///  Register all callouts to communicate with the Ghostscript library
     /// </summary>
@@ -537,8 +696,6 @@ type
     /// </summary>
     procedure SetLastErrorInternal(AText: string; AErrorCode: Integer = -1);
   protected
-    FLogStdIn: TStringList;  // log StdIn
-    FLogStdOut: TStringList; // log StdOut
     /// <summary>
     ///  Call event <see cref="SkiSys.GS_Api|TGS_Api.OnAfterExecute"/>
     /// </summary>
@@ -576,6 +733,11 @@ type
     ///  Write a log when the API is in Debug Mode
     /// </summary>
     procedure DebugLog(AText: string); virtual;
+    /// <summary>
+    ///  Will fire the given event and the string synchronized, when the api is
+    ///  execute in a thread
+    /// </summary>
+    procedure FireEvent(AEvent: TGSEvent_Std; AStr: string); virtual;
     /// <summary>
     ///  Free the gs_instance
     /// </summary>
@@ -705,6 +867,10 @@ type
     ///  LastErrorCode from Ghostscript
     /// </summary>
     property LastErrorCode: Integer read FLastErrorCode;
+    /// <summary>
+    ///  Is currently a thread running
+    /// </summary>
+    property ThreadRunning: Boolean read GetThreadRunning;
     /// <summary>
     ///  Can be used to turn off the automatic Exit(gsapi_exit) call after
     ///  InitWithArgs, but you have to call Exit by your self. A saver method
@@ -880,7 +1046,8 @@ end;
 
 function GSCallout(instance: Pointer; callout_handle: Pointer;
                    const device_name: PAnsiChar;
-                   id, size: Integer; data: Pointer): Integer; stdcall;
+                   id, size: Integer; data: Pointer): Integer;
+                   {$IFDEF MSWINDOWS}stdcall;{$ELSE}cdecl;{$ENDIF}
 var
   ADisplayCallback: p_gs_display_get_callback_t;
   AApi: TGS_Api;
@@ -888,7 +1055,7 @@ begin
   Result := -1;
   AApi := TGS_Api(callout_handle);
   if (AApi = nil) then
-    raise Exception.Create('GSCallout: TGS_Api object not found');
+    raise EGS_ApiException.Create('TGS_Api object not found', 'GSCallout', -1);
   // only check the display callback
   if ((device_name <> nil) and ({$IFDEF DELPHI}System.AnsiStrings.{$ENDIF}
                                 StrComp(device_name, 'display') = 0)) then
@@ -908,7 +1075,7 @@ begin
 end;
 
 function GSStdIn(ACaller: Pointer; ABuffer: PAnsiChar;
-  ALen: Integer): Integer; stdcall;
+  ALen: Integer): Integer; {$IFDEF MSWINDOWS}stdcall;{$ELSE}cdecl;{$ENDIF}
 var
   Text: AnsiString;
   AApi: TGS_Api;
@@ -916,51 +1083,44 @@ begin
   //TODO: Check the StdIn, because its usally an input
   Text := '';
   AApi := TGS_Api(ACaller);
-
-  StrPCopy(ABuffer, Text);
   AApi.StdIn(string(Text));
+  StrPCopy(ABuffer, Text);
   Result := ALen;
 end;
 
 function GSStdOut(ACaller: Pointer; const ABuffer: PAnsiChar;
-  ALen: Integer): Integer; stdcall;
+  ALen: Integer): Integer; {$IFDEF MSWINDOWS}stdcall;{$ELSE}cdecl;{$ENDIF}
 var
   AStr: AnsiString;
-  Buffer: PAnsiChar;
   AApi: TGS_Api;
 begin
-  GetMem(Buffer, ALen + 1);
-  FillMemory(Buffer, ALen + 1, 0);
-  CopyMemory(Buffer, ABuffer, ALen);
-
-  AApi := TGS_Api(ACaller);
-  AStr := AnsiString(Buffer);
-  AApi.StdOut(string(AStr));
-
-  FreeMem(Buffer);
-  Result := ALen;
+  Result := 0;
+  if (ALen > 0) then
+  begin
+    AApi := TGS_Api(ACaller);
+    SetString(AStr, ABuffer, ALen);
+    AApi.StdOut(string(AStr));
+    Result := ALen;
+  end;
 end;
 
 function GSStdErr(ACaller: Pointer; const ABuffer: PAnsiChar;
-  ALen: Integer): Integer; stdcall;
+  ALen: Integer): Integer; {$IFDEF MSWINDOWS}stdcall;{$ELSE}cdecl;{$ENDIF}
 var
   AStr: AnsiString;
-  Buffer: PAnsiChar;
   AApi: TGS_Api;
 begin
-  GetMem(Buffer, ALen + 1);
-  FillMemory(Buffer, ALen + 1, 0);
-  CopyMemory(Buffer, ABuffer, ALen);
-
-  AApi := TGS_Api(ACaller);
-  AStr := AnsiString(Buffer);
-  AApi.StdError(string(AStr));
-
-  FreeMem(Buffer);
-  Result := ALen;
+  Result := 0;
+  if (ALen > 0) then
+  begin
+    AApi := TGS_Api(ACaller);
+    SetString(AStr, ABuffer, ALen);
+    AApi.StdError(string(AStr));
+    Result := ALen;
+  end;
 end;
 
-function GSPoll(ACaller: Pointer): Integer; stdcall;
+function GSPoll(ACaller: Pointer): Integer; {$IFDEF MSWINDOWS}stdcall;{$ELSE}cdecl;{$ENDIF}
 begin
   Result := TGS_Api(ACaller).Poll;
 end;
@@ -1051,6 +1211,52 @@ end;
 
 {$ENDREGION}
 
+{$REGION 'TStrSyncObject' }
+
+constructor TStrSyncObject.Create(AEvent: TGSEvent_Std; AStr: string);
+begin
+  FEvent := AEvent;
+  FStr := AStr;
+end;
+
+procedure TStrSyncObject.Execute;
+begin
+  FEvent(FStr);
+end;
+
+{$ENDREGION}
+
+{$REGION 'EGS_ApiException' }
+
+function EGS_ApiException.GetMessage(AValue: string): string;
+begin
+  FInternalMessage := AValue;
+  if (FFunctionName <> '') then
+    Result := Format(MessageFunctionFmt, [FErrorCode, FFunctionName,
+                                          FInternalMessage])
+  else
+    Result := Format(MessageErrorCodeFmt, [FErrorCode, FFunctionName,
+                                           FInternalMessage]);
+end;
+
+constructor EGS_ApiException.Create(const Msg, AFunctionName: string;
+  error: Integer);
+begin
+  FFunctionName := AFunctionName;
+  FErrorCode := error;
+  inherited Create(GetMessage(Msg));
+end;
+
+constructor EGS_ApiException.CreateFmt(const Msg, AFunctionName: string;
+  error: Integer; const Args: array of const);
+begin
+  FFunctionName := AFunctionName;
+  FErrorCode := error;
+  inherited CreateFmt(GetMessage(Msg), Args);
+end;
+
+{$ENDREGION}
+
 {$REGION 'TGS_Api' }
 
 constructor TGS_Api.Create;
@@ -1061,7 +1267,7 @@ end;
 function TGS_Api.CheckRunResult(AResult: Integer): Integer;
 begin
   Result := AResult;
-  if (AResult <= Integer(gs_error_Fatal)) and
+  if (AResult <= ord(gs_error_Fatal)) and
      (AResult <> ord(gs_error_NeedInput)) and
      (AResult <> ord(gs_error_NeedFile)) then
   begin
@@ -1121,36 +1327,63 @@ begin
     StdOutLine(AText);
 end;
 
+procedure TGS_Api.FireEvent(AEvent: TGSEvent_Std; AStr: string);
+var
+  ASync: TStrSyncObject;
+begin
+  if (Assigned(AEvent)) and (AStr <> '') then
+  begin
+    if (FThread <> nil) then
+    begin
+      ASync := TStrSyncObject.Create(AEvent, AStr);
+      try
+        TThread.Synchronize(FThread, ASync.Execute);
+      finally
+        FreeAndNil(ASync);
+      end;
+    end else
+      AEvent(AStr);
+  end;
+end;
+
 destructor TGS_Api.Destroy;
 begin
-  if (FDefaultDeviceList <> nil) then
-    FreeAndNil(FDefaultDeviceList);
-  if (GSDisplay <> nil) then
-    FreeAndNil(GSDisplay);
-  if (FDebugParams <> nil) then
-    FreeAndNil(FDebugParams);
-  if (FLastErrors <> nil) then
-    FreeAndNil(FLastErrors);
-  if (FLogStdIn <> nil) then
-    FreeAndNil(FLogStdIn);
-  if (FLogStdOut <> nil) then
-    FreeAndNil(FLogStdOut);
-  if (FRevision <> nil) then
-    FreeAndNil(FRevision);
+  //FreeAndNil(FCriticalSection);
+  FreeAndNil(FDefaultDeviceList);
+  FreeAndNil(GSDisplay);
+  FreeAndNil(FDebugParams);
+  FreeAndNil(FLastErrors);
+  FreeAndNil(FLogStdIn);
+  FreeAndNil(FLogStdOut);
+  FreeAndNil(FRevision);
   FreeGSInstance;
   inherited;
 end;
 
 procedure TGS_Api.Exit;
+var
+  AError: Integer;
 begin
+  (* When gsapi_exit fails it can have different issues
+   *   1. read to much bytes from PImage pointer
+   *   2. the instance of the api can't be used anymore
+   *)
   if (not FExit) then
   begin
-    FLastErrorCode := gsapi_exit(FInstance);
-    FExit := FLastErrorCode > -1;
-    if (FExit) then
-      DebugLog('gsapi_exit called succesfully')
-    else
-      raise Exception.CreateFmt('Error(%d) on gsapi_exit', [FLastErrorCode]);
+    try
+      AError := gsapi_exit(FInstance);
+      FExit := AError > -1;
+      if (FExit) then
+        DebugLog('gsapi_exit called succesfully')
+      else
+        SetLastError(Format('Error(%d) on gsapi_exit', [AError]));
+    except
+      on E: Exception do
+      begin
+        SetLastError('Warning(-1) gsapi_exit failed: ' + E.Message, 0);
+        FExit := True; // set it to true to avoid more errors
+      end;
+    end;
   end;
 end;
 
@@ -1198,8 +1431,8 @@ begin
       Result := FDefaultDeviceList;
       for i := 0 to ALen - 1 do
       begin
-        if (PStr[i] <> '') then
-          FDefaultDeviceList.Add(String(AnsiString(PStr[i])));
+        if (PStr^[i] <> '') then
+          FDefaultDeviceList.Add(String(AnsiString(PStr^[i])));
       end;
     end else
     begin
@@ -1223,6 +1456,11 @@ end;
 function TGS_Api.GetLogStdOut: TStrings;
 begin
   Result := FLogStdOut;
+end;
+
+function TGS_Api.GetThreadRunning: Boolean;
+begin
+  Result := (FThread <> nil) and (FThread.CheckTerminated);
 end;
 
 function TGS_Api.GetPAnsiCharArray(AAnsiStrings: TAnsiStringArray): PArgv;
@@ -1253,8 +1491,10 @@ begin
   end else
     ADllFile := ExpandFileName(ADllFile);
 
+  {$IFDEF MSWINDOWS}
   if (not FileExists(ADllFile)) then
-    raise Exception.CreateFmt('couldn''t find the Ghostscript Dll at %s', [ADllFile]);
+    raise EFileNotFoundException.CreateFmt('couldn''t find the Ghostscript Dll at %s', [ADllFile]);
+  {$ENDIF}
 
   DebugParams := TGSDebugParams.Create;
   GSDisplay := TGS_Display.Create(Self);
@@ -1270,7 +1510,8 @@ begin
 
     FLastErrorCode := gsapi_new_instance(FInstance, @Self);
     if (FLastErrorCode < 0) then
-      raise Exception.CreateFmt('Error(%d): GS Instance couldn''t be created!', [FLastErrorCode]);
+      raise EGS_ApiException.Create('GS Instance couldn''t be created!', '',
+                                    FLastErrorCode);
     if (FRevision = nil) then
       FRevision := TGS_Revision.Create(Self)
     else
@@ -1290,7 +1531,10 @@ begin
 end;
 
 function TGS_Api.InitWithArgs(AArgs: PArgv): Boolean;
+var
+  AError: Boolean;
 begin
+  AError := False;
   ClearInternalLog;
   try
     try
@@ -1300,19 +1544,22 @@ begin
       // set the argument encoding
       FLastErrorCode := gsapi_set_arg_encoding(FInstance, Integer(FArgumentEncoding));
       if (FLastErrorCode < 0) then
-        raise Exception.CreateFmt('Error(%d) on gsapi_set arg encoding)', [FLastErrorCode]);
-      // call iit_with_args
+        raise EGS_ApiException.Create('', 'gsapi_set_arg_encoding', FLastErrorCode);
+      // call init_with_args
       FLastErrorCode := CheckResult(gsapi_init_with_args(FInstance,
                                                          High(AArgs) + 1, AArgs));
       AfterInitWithArgs;
     except
       on E: Exception do
-        SetLastError('Error InitWithArgs: ' + e.Message, Integer(gs_error_unknownerror));
+      begin
+        SetLastError('Error InitWithArgs: ' + E.Message, -1);
+        AError := True;
+      end;
     end;
   finally
     FInitWithArgs := True;
-    if (not FNoExit) then
-      Exit;
+    if (not FNoExit) and (not AError) then
+      Self.Exit;
   end;
   Result := FLastErrorCode = 0;
 end;
@@ -1347,28 +1594,26 @@ function TGS_Api.InitWithArgs(AStrings: TStrings): Boolean;
 var
   AAnsiStrs: TAnsiStringArray;
   AArgs: PArgv;
-  ACmdArgs: string;
   i: Integer;
 begin
-  Result := False;
   if (AStrings <> nil) and (AStrings.Count > 0) then
   begin
     if (Debug) then
     begin
-      ACmdArgs := GS_CMD_EXE;
+      FDebugLastCmdArgs := GS_CMD_EXE;
       StdOutLine('---  Debug Init Parameters  ---');
       for i := 0 to AStrings.Count - 1 do
       begin
         StdOutLine('SetParam: ' + AStrings[i]);
         // check the arguments for whitspaces
-        ACmdArgs := ACmdArgs + ' ' + QuoteCmdParameter(AStrings[i]);
+        FDebugLastCmdArgs := FDebugLastCmdArgs + ' ' + QuoteCmdParameter(AStrings[i]);
       end;
       StdOutLine('--- END ---');
     end;
     if (DebugShowCmdArgs) then
     begin
       StdOutLine('--- CMD Args ---');
-      StdOutLine(ACmdArgs);
+      StdOutLine(FDebugLastCmdArgs);
       StdOutLine('--- CMD Args END ---');
     end;
 
@@ -1378,7 +1623,8 @@ begin
     if (not Self.FThreadUsed) then
       ThreadFinished(Self);
   end else
-    raise Exception.Create('InitWithArgs: No parameters set, operation canceled');
+    raise EGS_ApiException.Create('No parameters set, operation canceled',
+                                  'InitWithArgs', -1010);
 end;
 
 procedure TGS_Api.InitWithArgsStart(AStrings: TStrings);
@@ -1387,7 +1633,7 @@ begin
   if (not FThreadUsed) then
   begin
     Self.FThreadUsed := True;
-    TGS_ApiThread.Create(Self, AStrings);
+    FThread := TGS_ApiThread.Create(Self, AStrings);
   end;
 end;
 
@@ -1559,10 +1805,11 @@ begin
     AStr := AText.Replace(#10#10, #13#10);
     AStr := AStr.Replace(#10, #13#10);
     // internal stuff
-    SetLastErrorInternal(AText);
+    SetLastErrorInternal(AText, 0);
     // push the external event
-    if (Assigned(FEventStdError)) then
-      FEventStdError(AStr);
+    FireEvent(FEventStdError, AStr);
+    //if (Assigned(FEventStdError)) then
+    //  FEventStdError(AStr);
   end;
 end;
 
@@ -1578,9 +1825,12 @@ var
   AStr: string;
 begin
   AStr := AText.Replace(#10, #13#10);
+  if (AStr.Contains('error')) then //sometimes the error is written to stdout
+    StdError(AText);
   FLogStdOut.Text := FLogStdOut.Text + AStr;
-  if (Assigned(FEventStdOut)) then
-    FEventStdOut(AStr);
+  FireEvent(FEventStdOut, AStr);
+  //if (Assigned(FEventStdOut)) then
+  //  FEventStdOut(AStr);
 end;
 
 procedure TGS_Api.StdOutLine(AText: string);
@@ -1590,7 +1840,7 @@ end;
 
 procedure TGS_Api.ThreadFinished(Sender: TObject);
 begin
-  FThreadRunning := False;
+  FThread := nil;
   AfterExecute;
 end;
 
@@ -1620,16 +1870,19 @@ var
   AOuterException: Exception;
 begin
   try
-    AApi.FLastErrorCode := gsapi_revision(@ARevision, sizeof(ARevision));
-    if (AApi.FLastErrorCode > -1) then
+    AApi.FLastErrorCode := gsapi_revision(@ARevision, SizeOf(ARevision));
+    if (AApi.FLastErrorCode = 0) then
     begin
-      Self.Product := string(AnsiString(ARevision.product));
-      Self.Copyright := string(AnsiString(ARevision.copyright));
-      Self.Revision := ARevision.revision;
-      Self.RevisionStr := GetRevisonStr;
-      Self.RevisionDate := ARevision.revisiondate;
+      FProduct := string(AnsiString(ARevision.product));
+      FCopyright := string(AnsiString(ARevision.copyright));
+      FRevision := ARevision.revision;
+      FRevisionStr := GetRevisonStr;
+      FRevisionDate := ARevision.revisiondate;
       CheckRevision;
-    end;
+    end else
+    // I don't raise an error here, because the API should still work
+    if (AApi.FLastErrorCode > 0) then
+      FApi.SetLastError('Error on GetRevsion: wrong structure size', 0);
   except
     on E: Exception do
     begin
@@ -1677,14 +1930,12 @@ destructor TGS_ApiThread.Destroy;
 begin
   if (FArgs <> nil) then
     FreeAndNil(FArgs);
-  FApi.FThreadRunning := False;
   FApi.FThreadUsed := False;
   inherited Destroy;
 end;
 
 procedure TGS_ApiThread.Execute;
 begin
-  FApi.FThreadRunning := True;
   if (not Terminated) then
   begin
     try
@@ -1731,8 +1982,8 @@ end;
 function TGS_Display.EventAdjustBandHeight(ADevice: Pointer;
   ABandHeight: Integer): Integer;
 begin
-  DebugLogFmt('TGS_Displays.EventMemAlloc: device=%d band_height=%d',
-              [UInt(ADevice), UInt(ABandHeight)]);
+  DebugLogFmt('TGS_Displays.EventMemAlloc: device=%p band_height=%d',
+              [ADevice, ABandHeight]);
   if (Assigned(FEventAdjustBandHeight)) then
     Result := FEventAdjustBandHeight(ADevice, ABandHeight)
   else
@@ -1741,7 +1992,7 @@ end;
 
 function TGS_Display.EventClose(ADevice: Pointer): Integer;
 begin
-  DebugLogFmt('TGSDisplays.EventClose: close device %d', [UInt(ADevice)]);
+  DebugLogFmt('TGSDisplays.EventClose: close device %p', [ADevice]);
   if (Assigned(FEventClose)) then
     Result := FEventClose(ADevice)
   else
@@ -1750,8 +2001,8 @@ end;
 
 procedure TGS_Display.EventMemAlloc(ADevice: Pointer; ASize: SIZE_T);
 begin
-  DebugLogFmt('TGS_Displays.EventMemAlloc: device=%d size=%d',
-              [UInt(ADevice), UInt(ASize)]);
+  DebugLogFmt('TGS_Displays.EventMemAlloc: device=%p size=%d',
+              [ADevice, Cardinal(ASize)]);
   //can be used to implement to allocate your own memory for the bitmap
   if (Assigned(FEventMemAlloc)) then
     FEventMemAlloc(ADevice, ASize);
@@ -1759,8 +2010,8 @@ end;
 
 function TGS_Display.EventMemFree(ADevice, AMem: Pointer): Integer;
 begin
-  DebugLogFmt('TGS_Displays.EventMemFree: device=%d mem=%d',
-              [UInt(ADevice), UInt(AMem)]);
+  DebugLogFmt('TGS_Displays.EventMemFree: device=%p mem=%p',
+              [ADevice, AMem]);
   if (Assigned(FEventMemFree)) then
     Result := FEventMemFree(ADevice, AMem)
   else
@@ -1769,9 +2020,9 @@ end;
 
 function TGS_Display.EventOpen(ADevice: Pointer): Integer;
 const
-  DebugMsg = 'TGSDisplays.EventOpen: open device %d';
+  DebugMsg = 'TGSDisplays.EventOpen: open device %p';
 begin
-  DebugLogFmt(DebugMsg, [UInt(ADevice)]);
+  DebugLogFmt(DebugMsg, [ADevice]);
   FImageList.InitImageData(ADevice);
   if (Assigned(FEventOpen)) then
     Result := FEventOpen(ADevice)
@@ -1791,7 +2042,7 @@ end;
 
 function TGS_Display.EventPreclose(ADevice: Pointer): Integer;
 begin
-  DebugLogFmt('TGSDisplays.EventPreclose: device=%d', [UInt(ADevice)]);
+  DebugLogFmt('TGSDisplays.EventPreclose: device=%p', [ADevice]);
   if (Assigned(FEventPreClose)) then
     Result := FEventPreClose(ADevice)
   else
@@ -1814,12 +2065,14 @@ function TGS_Display.EventRectangleRequest(ADevice, AMemory: Pointer;
   out ARaster, APlaneRaster: Integer; out X, Y, W, H: Integer): Integer;
 const
   DebugMsg = 'TGSDisplays.EventRectangleRequest: ' +
-             'memory=%d raster=%d plane_raster=%d x=%d y=%d w=%d h=%d';
+             'memory=%p raster=%d plane_raster=%d x=%d y=%d w=%d h=%d';
 begin
-  DebugLogFmt(DebugMsg, [UInt(AMemory), ARaster, APlaneRaster, X, Y, W, H]);
   if (Assigned(FEventRectangleRequest)) then
+  begin
     Result := FEventRectangleRequest(ADevice, AMemory, ARaster, APlaneRaster,
-                                     X, Y, W, H)
+                                     X, Y, W, H);
+    DebugLogFmt(DebugMsg, [AMemory, ARaster, APlaneRaster, X, Y, W, H]);
+  end
   else
     Result := 0;
 end;
@@ -1827,10 +2080,10 @@ end;
 function TGS_Display.EventSeparation(ADevice: Pointer;
   AComponent: Integer; AComponentName: PAnsiChar; C, M, Y, K: Word): Integer;
 const
-  DebugMsg = 'TGSDisplays.EventSeparation: device=%d' +
+  DebugMsg = 'TGSDisplays.EventSeparation: device=%p' +
              'component=%d component_name=%d c=%d m=%d y=%d k=%d';
 begin
-  DebugLogFmt(DebugMsg, [UInt(ADevice), AComponent, AComponentName, C, M, Y, K]);
+  DebugLogFmt(DebugMsg, [ADevice, AComponent, AComponentName, C, M, Y, K]);
   if (Assigned(FEventSeparation)) then
     Result := FEventSeparation(ADevice, AComponent, String(AnsiString(AComponentName)),
                                C, M, Y, K)
@@ -1841,11 +2094,11 @@ end;
 function TGS_Display.EventSize(ADevice: Pointer;
   AWidth, AHeight, ARaster: Integer; AFormat: Cardinal; PImage: PByte): Integer;
 const
-  DebugMsg = 'TGSDisplays.EventSize: device=%d width=%d height=%d ' +
-                                    'raster=%d format=%d pimage=%d';
+  DebugMsg = 'TGSDisplays.EventSize: device=%p width=%d height=%d ' +
+                                    'raster=%d format=%d pimage=%p';
 begin
-  DebugLogFmt(DebugMsg, [UInt(ADevice), AWidth, AHeight, ARaster, AFormat,
-                         UInt(PImage)]);
+  DebugLogFmt(DebugMsg, [ADevice, AWidth, AHeight, ARaster, AFormat,
+                         PImage]);
   FImageList.SetDataAndSize(AWidth, AHeight, ARaster, AFormat, PImage);
   if (Assigned(FEventSize)) then
     Result := FEventSize(ADevice, AWidth, AHeight, ARaster, AFormat, PImage)
@@ -1855,7 +2108,7 @@ end;
 
 function TGS_Display.EventSync(ADevice: Pointer): Integer;
 begin
-  DebugLogFmt('TGSDisplays.EventSync: sync device=%d', [UInt(ADevice)]);
+  DebugLogFmt('TGSDisplays.EventSync: sync device=%p', [ADevice]);
   if (Assigned(FEventSync)) then
     Result := FEventSync(ADevice)
   else
@@ -1938,15 +2191,230 @@ begin
   inherited Create;
   FGS_ImageDataLoaded := False;
   FDisplay := ADisplays;
-  FGS_Format := AFormat;
+  FGS_Format.Format := AFormat;
   FGS_Raster := ARaster;
   SetBmpInfoHeader(AWidth, AHeight);
   SetImageData(PImage);
 end;
 
-procedure TGS_Image.ConvertImageDataLine(ADataLine: Pointer);
+function TGS_Image.GetGrayLuminance(AColor: TColor;
+  const ALum: array of Byte): TColor;
+var
+  Luminance: Byte;
 begin
-  //TODO: implement convert funtions
+  Result := 0;
+  if (High(ALum) >= 2) then
+  begin
+    Luminance := ( ((AColor and $00FF0000) shr 16 * ALum[0]) +
+                   ((AColor and $0000FF00) shr 8 * ALum[1]) +
+                   ((AColor and $000000FF) * ALum[2])) shr 8;
+    Result := (AColor and $FF000000) or (Luminance shl 16) or
+              (Luminance shl 8) or Luminance;
+  end;
+end;
+
+function TGS_Image.GetGS_Format: Cardinal;
+begin
+  Result := FGS_Format.Format;
+end;
+
+function TGS_Image.ConvertImageDataLine(ASrcLine, ADestLine: PByte): Boolean;
+var
+  ASrcBytes, ADestBytes: PByte;
+  i: Integer;
+begin
+  Result := False;
+  case (FGS_Format.Color) of
+    DISPLAY_COLORS_NATIVE:
+    begin
+      if (FGS_Format.Depth = DISPLAY_DEPTH_16) then
+      begin
+        if (FGS_Format.Endian = DISPLAY_LITTLEENDIAN) then
+        begin
+          if (FGS_Format.Native555 = DISPLAY_NATIVE_555) then
+          begin // BGR555
+            for i := 0 to Width - 1 do
+            begin
+              ASrcBytes := ASrcLine + i * 2;
+              {$IFDEF LINUX}ADestBytes := ADestLine + i * 4;{$ENDIF}
+              {$IFDEF MSWINDOWS}ADestBytes := ADestLine + i * 3;{$ENDIF}
+              ConvertNative555(ASrcBytes, ADestBytes);
+            end;
+            Result := True;
+          end else
+          begin // BGR565
+            for i := 0 to Width - 1 do
+            begin
+              ASrcBytes := ASrcLine + i * 2;
+              {$IFDEF LINUX}ADestBytes := ADestLine + i * 4;{$ENDIF}
+              {$IFDEF MSWINDOWS}ADestBytes := ADestLine + i * 3;{$ENDIF}
+              ConvertNative565(ASrcBytes, ADestBytes);
+            end;
+            Result := True;
+          end;
+        end;
+      end else
+      if (FGS_Format.Depth = DISPLAY_DEPTH_8) then
+      begin
+
+      end;
+    end;
+    DISPLAY_COLORS_GRAY:
+    begin
+      if (FGS_Format.Depth = DISPLAY_DEPTH_8) then
+      begin
+        {$IFDEF MSWINDOWS}
+        // convert to 24-bit gray scale
+        for i := 0 to Width - 1 do
+        begin
+          ADestBytes := ADestLine + i * 3;
+          ADestBytes[0] := (ASrcLine + i)[0];
+          ADestBytes[1] := (ASrcLine + i)[0];
+          ADestBytes[2] := (ASrcLine + i)[0];
+        end;
+        Result := True;
+        {$ENDIF}
+        // Linux direct copy
+      end;
+    end;
+    DISPLAY_COLORS_RGB:
+    begin
+      if (FGS_Format.Depth = DISPLAY_DEPTH_8) then
+      begin
+        if ( ((FGS_Format.Alpha = DISPLAY_ALPHA_FIRST) or
+              (FGS_Format.Alpha = DISPLAY_UNUSED_FIRST)) and
+             (FGS_Format.Endian = DISPLAY_BIGENDIAN) ) then
+        begin // Mac Format
+          for i := 0 to Width - 1 do
+          begin
+            ASrcBytes := ASrcLine + i * 4;
+            ADestBytes := ADestLine + i * 3;
+            // first byte of the source is a filler
+            ADestBytes[0] := ASrcBytes[1];
+            ADestBytes[1] := ASrcBytes[2];
+            ADestBytes[2] := ASrcBytes[3];
+          end;
+          Result := True;
+        end else
+        if ( (FGS_Format.Endian = DISPLAY_LITTLEENDIAN) ) then
+        begin
+          if ( (FGS_Format.Alpha = DISPLAY_UNUSED_LAST) or
+               (FGS_Format.Alpha = DISPLAY_ALPHA_LAST)) then
+          begin // Windows format + alpha = BGRx
+            {$IFDEF MSWINDOWS}
+            for i := 0 to Width - 1 do
+            begin
+              ASrcBytes := ASrcLine + i * 4;
+              ADestBytes := ADestLine + i * 3;
+              ADestBytes[0] := ASrcBytes[0];
+              ADestBytes[1] := ASrcBytes[1];
+              ADestBytes[2] := ASrcBytes[2];
+              // last byte of the source is a filler
+            end;
+            Result := True;
+            {$ENDIF}
+            //Linux direct copy
+          end else
+          if ( (FGS_Format.Alpha = DISPLAY_UNUSED_FIRST) or
+               (FGS_Format.Alpha = DISPLAY_ALPHA_FIRST)) then
+          begin // xBGR
+            {$IFDEF LINUX}
+            for i := 0 to Width - 1 do
+            begin
+              ASrcBytes := ASrcLine + i * 4;
+              ADestBytes := ADestLine + i * 4;
+              ADestBytes[0] := ASrcBytes[1];
+              ADestBytes[1] := ASrcBytes[2];
+              ADestBytes[2] := ASrcBytes[3];
+              ADestBytes[3] := ASrcBytes[0];
+            end;
+            Result := True;
+            {$ENDIF}
+            //For Windows we don't need to convert it
+          end else
+          if (FGS_Format.Alpha = DISPLAY_ALPHA_NONE) then
+          begin
+            {$IFDEF LINUX}
+            for i := 0 to Width - 1 do
+            begin
+              ASrcBytes := ASrcLine + i * 3;
+              ADestBytes := ADestLine + i * 4;
+              ADestBytes[0] := ASrcBytes[0];
+              ADestBytes[1] := ASrcBytes[1];
+              ADestBytes[2] := ASrcBytes[2];
+              ADestBytes[3] := 0; // we need to add a filler
+            end;
+            Result := True;
+            {$ENDIF}
+            //For Windows we don't need to convert it
+          end;
+        end;
+      end;
+    end;
+    DISPLAY_COLORS_CMYK:
+    begin
+      //no support for CMYK
+    end;
+  end;
+end;
+
+procedure TGS_Image.ConvertNative555(ASrcBytes, ADestBytes: PByte);
+var
+  w: UShort;
+  AValue: Integer;
+begin
+  w := ASrcBytes[0] + (ASrcBytes[1] shl 8);
+  AValue := (w shr 10) and $1F; //red
+  ADestBytes[2] := (AValue shl 3) + (AValue shr 2);
+  AValue := (w shr 5) and $1F;   // green
+  ADestBytes[1] := (AValue shl 3) + (AValue shr 2);
+  AValue := w and $1F;          // blue
+  ADestBytes[0] := (AValue shl 3) + (AValue shr 2);
+end;
+
+procedure TGS_Image.ConvertNative565(ASrcBytes, ADestBytes: PByte);
+var
+  w: UShort;
+  AValue: Integer;
+begin
+  w := ASrcBytes[0] + (ASrcBytes[1] shl 8);
+  AValue := (w shr 11) and $1F; //red
+  ADestBytes[0] := (AValue shl 3) + (AValue shr 2);
+  AValue := (w shr 5) and $3F;   // green
+  ADestBytes[1] := (AValue shl 3) + (AValue shr 2);
+  AValue := w and $1F;          // blue
+  ADestBytes[2] := (AValue shl 3) + (AValue shr 2);
+end;
+
+function TGS_Image.GetBitsPerPixel: Integer;
+begin
+  Result := -1;
+  if (FBmpInfoHeader.biBitCount <= 1) then
+    Result := 1
+  else
+  if (FBmpInfoHeader.biBitCount <= 4) then
+    Result := 4
+  else
+  if (FBmpInfoHeader.biBitCount <= 8) then
+    Result := 8
+  else
+  if (FBmpInfoHeader.biBitCount > 24) then
+    Result := 32
+  else
+  if (FBmpInfoHeader.biBitCount > 8) then
+    Result := 24;
+end;
+
+function TGS_Image.GetBytesPerLine: Integer;
+begin
+  Result := ( ((FBmpInfoHeader.biWidth * FBmpInfoHeader.biBitCount + 31)
+               and not NativeUInt(31)) + 7 ) shr 3;
+end;
+
+function TGS_Image.GetScanLine(AIndex: Integer): Pointer;
+begin
+  Result := {$IFDEF FPC}GetRawImagePtr^.GetLineStart(AIndex){$ENDIF}
+            {$IFDEF DELPHI}Scanline[AIndex]{$ENDIF};
 end;
 
 constructor TGS_Image.Create(ADisplays: TGS_Display; AData: TGS_ImageData);
@@ -1954,15 +2422,15 @@ begin
   inherited Create;
   FGS_ImageDataLoaded := False;
   FDisplay := ADisplays;
-  FGS_Format := AData.Format;
+  FGS_Format.Format := AData.Format;
   FGS_Raster := AData.Raster;
   SetBmpInfoHeader(AData.Width, AData.Height);
   SetImageData(AData.ImageData);
 end;
 
-function TGS_Image.GetPixelFormatFromBMIH: TPixelFormat;
+function TGS_Image.GetPixelFormatFromBits: TPixelFormat;
 begin
-  case (FBmpInfoHeader.biBitCount) of
+  case (FBitsPerPixel) of
     1: Result := pf1bit;
     4: Result := pf4bit;
     8: Result := pf8bit;
@@ -1975,6 +2443,11 @@ begin
   end;
 end;
 
+procedure TGS_Image.MemCopy(Source, Dest: Pointer; ALength: Integer);
+begin
+  Move(Source^, Dest^, SizeInt(ALength));
+end;
+
 procedure TGS_Image.SetBmpInfoHeader(AWidth, AHeight: Integer);
 begin
   FBmpInfoHeader.biSize := SizeOf(BmpInfoHeader);
@@ -1982,9 +2455,9 @@ begin
   FBmpInfoHeader.biWidth := AWidth;
 
   FBmpInfoHeader.biPlanes := 1;
-  case (FGS_Format and DISPLAY_COLORS_MASK) of
+  case (FGS_Format.Color) of
     DISPLAY_COLORS_NATIVE:
-      case (FGS_Format and DISPLAY_DEPTH_MASK) of
+      case (FGS_Format.Depth) of
         DISPLAY_DEPTH_1:
         begin
           FBmpInfoHeader.biBitCount := 1;
@@ -2005,7 +2478,7 @@ begin
         end;
         DISPLAY_DEPTH_16:
         begin
-          if (FGS_Format and DISPLAY_ENDIAN_MASK) = DISPLAY_BIGENDIAN then
+          if (FGS_Format.Endian = DISPLAY_BIGENDIAN) then
           begin
             FBmpInfoHeader.biBitCount := 24;
             FBmpInfoHeader.biClrUsed := 0;
@@ -2020,7 +2493,7 @@ begin
         else exit;
     end;
     DISPLAY_COLORS_GRAY:
-      case (FGS_Format and DISPLAY_DEPTH_MASK) of
+      case (FGS_Format.Depth) of
         DISPLAY_DEPTH_1:
         begin
           FBmpInfoHeader.biBitCount := 1;
@@ -2035,18 +2508,26 @@ begin
         end;
         DISPLAY_DEPTH_8:
         begin
-          FBmpInfoHeader.biBitCount := 8;
-          FBmpInfoHeader.biClrUsed := 256;
-          FBmpInfoHeader.biClrImportant := 256;
+          if (FGS_Format.FirstRow = DISPLAY_BOTTOMFIRST) then //Windows
+          begin
+            FBmpInfoHeader.biBitCount := 24;
+            FBmpInfoHeader.biClrUsed := 0;
+            FBmpInfoHeader.biClrImportant := 0;
+          end else
+          begin
+            FBmpInfoHeader.biBitCount := 8;
+            FBmpInfoHeader.biClrUsed := 256;
+            FBmpInfoHeader.biClrImportant := 256;
+          end;
         end;
         else exit; //TODO: raise an error
     end;
     DISPLAY_COLORS_RGB:
     begin
-      if (FGS_Format and DISPLAY_DEPTH_MASK) <> DISPLAY_DEPTH_8 then
+      if (FGS_Format.Depth <> DISPLAY_DEPTH_8) then
         exit;
-      if (((FGS_Format and DISPLAY_ALPHA_MASK) = DISPLAY_UNUSED_LAST)and
-          ((FGS_Format and DISPLAY_ENDIAN_MASK) = DISPLAY_LITTLEENDIAN)) then
+      if ((FGS_Format.Alpha = DISPLAY_UNUSED_FIRST) and
+          (FGS_Format.FirstRow = DISPLAY_BOTTOMFIRST)) then
       begin
         FBmpInfoHeader.biBitCount := 32;
         FBmpInfoHeader.biClrUsed := 0;
@@ -2076,43 +2557,35 @@ begin
   FBmpInfoHeader.biSizeImage := 0;
   FBmpInfoHeader.biXPelsPerMeter := 0;
   FBmpInfoHeader.biYPelsPerMeter := 0;
-  FByteWidth := trunc(((FBmpInfoHeader.biWidth * FBmpInfoHeader.biBitCount + 31) and (65504)) / 8);
+  FBitsPerPixel := GetBitsPerPixel;
 end;
 
 procedure TGS_Image.SetImageData(PImage: PByte);
 var
-  ABmpInfo: BITMAPINFO;
-  DestBytes: PByte;
-  i, AByteWidth, Row: Integer;
+  DestBytes, CurrentBytes: PByte;
+  i, ALineIdx: Integer;
 begin
   if (Assigned(PImage)) then
   begin
     // initialize the size of the image
     SetSize(FBmpInfoHeader.biWidth, FBmpInfoHeader.biHeight);
-    // only use the raster when the calculated ByteWidth is different
-    if (FGS_Raster <> FByteWidth) then
+    PixelFormat := GetPixelFormatFromBits;
+
+    for i := 0 to FBmpInfoHeader.biHeight - 1 do
     begin
-      // get the PixelFormat from the BITMAPINFOHEADER
-      PixelFormat := GetPixelFormatFromBMIH;
-      // we have to use the raster to get the correct length of a line
-      AByteWidth := FGS_Raster;
-      for i := 0 to FBmpInfoHeader.biHeight - 1 do
-      begin
-        // get the pointer to the image data of the bitmap line
-        DestBytes := Scanline[i];
+      // get the pointer to the image data of the bitmap line
+      DestBytes := GetScanLine(i);
+      ALineIdx := i;
+      if (FGS_Format.FirstRow = DISPLAY_BOTTOMFIRST) then
         // In Windows we will paint the image bottom first, so we need to start
         // at the last row and end at the first row
-        Row := FBmpInfoHeader.biHeight - 1 - i;
+        ALineIdx := FBmpInfoHeader.biHeight - 1 - i;
+      CurrentBytes := PImage + FGS_Raster * ALineIdx;
+      // convert and copy the data if needed
+      // when not needed the function returns false and we do a direct copy
+      if (not ConvertImageDataLine(CurrentBytes, DestBytes)) then
         // copy the image data buffer to the bitmap memory
-        CopyMemory(DestBytes, PImage + AByteWidth * Row, FByteWidth);
-        // convert if needed
-        ConvertImageDataLine(DestBytes);
-      end;
-    end else
-    begin
-      ABmpInfo.bmiHeader := FBmpInfoHeader;
-      FGS_ImageDataLoaded := (SetDIBits(0, Handle, 0, Abs(FBmpInfoHeader.biHeight),
-                                        PImage, ABmpInfo, DIB_RGB_COLORS)) > 0;
+        MemCopy(CurrentBytes, DestBytes, FGS_Raster);
     end;
   end;
 end;

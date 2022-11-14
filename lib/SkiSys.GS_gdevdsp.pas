@@ -41,7 +41,9 @@ uses
     System.Classes, System.SysUtils, WinApi.Windows
   {$ENDIF}
   {$IFDEF FPC}
-    Classes, SysUtils, Windows
+    Classes, SysUtils
+    {$IFDEF MSWINDOWS}, Windows{$ENDIF}
+    {$IFDEF UNIX}, UnixType{$ENDIF}
   {$ENDIF}
     ;
 

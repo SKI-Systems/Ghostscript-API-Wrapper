@@ -52,28 +52,48 @@ const
     GS_DLL = 'gsdll64.dll';
   {$ENDIF}
 {$ENDIF}
+{$IFDEF LINUX}
+  GS_EXE = 'gs';
+  GS_CMD_EXE = 'gsc';
+  GS_DLL = 'libgs.so';
+{$ENDIF}
 
 
 type
+  // We need to define a clear pointer and string type in the right format
+  // for all platforms and enviroments and other data types as well
+  {$IFDEF FPC}
+    //CUTF8String = UTF8String;
+    UShort = Word;
+  {$ENDIF}
+  {$IFDEF DELPHI}
+    //CUTF8String = AnsiString; // check if we could use UTF8String as well
+    SizeInt = NativeInt; //platform compatible integer (64bit Int64 ...)
+  {$ENDIF}
+
   PArgv = array of PAnsiChar;
-  PList = PArgv;
+  PList = ^PArgv;
 
   p_gsapi_revision_t = ^gsapi_revision_t;
   gsapi_revision_t = record
     product: PAnsiChar;
     copyright: PAnsiChar;
-    revision: LongInt;
-    revisiondate: LongInt;
+    revision: {$IFDEF UNIX}SizeInt{$ELSE}LongInt{$ENDIF};
+    revisiondate: {$IFDEF UNIX}SizeInt{$ELSE}LongInt{$ENDIF};
   end;
 
 
-  stdin_fn_t = function(caller_handle: Pointer; buf: PAnsiChar; len: Integer): Integer; stdcall;
+  stdin_fn_t = function(caller_handle: Pointer; buf: PAnsiChar; len: Integer)
+                        : Integer; {$IFDEF MSWINDOWS}stdcall;{$ELSE}cdecl;{$ENDIF}
 
-  stdout_fn_t = function(caller_handle: Pointer; const str: PAnsiChar; len: Integer): Integer; stdcall;
+  stdout_fn_t = function(caller_handle: Pointer; const str: PAnsiChar; len: Integer)
+                         : Integer; {$IFDEF MSWINDOWS}stdcall;{$ELSE}cdecl;{$ENDIF}
 
-  stderr_fn_t = function(caller_handle: Pointer; const str: PAnsiChar; len: Integer): Integer; stdcall;
+  stderr_fn_t = function(caller_handle: Pointer; const str: PAnsiChar; len: Integer)
+                         : Integer; {$IFDEF MSWINDOWS}stdcall;{$ELSE}cdecl;{$ENDIF}
 
-  poll_fn_t = function(caller_handle: Pointer): Integer; stdcall;
+  poll_fn_t = function(caller_handle: Pointer)
+                       : Integer; {$IFDEF MSWINDOWS}stdcall;{$ELSE}cdecl;{$ENDIF}
 
   /// <summary>
   ///  The callout mechanism allows devices to query "callers" (users of the
@@ -92,7 +112,8 @@ type
   /// </summary>
   gs_callout = function(instance: Pointer; callout_handle: Pointer;
                         const device_name: PAnsiChar;
-                        id, size: Integer; data: Pointer): Integer; stdcall;
+                        id, size: Integer; data: Pointer): Integer;
+                        {$IFDEF MSWINDOWS}stdcall;{$ELSE}cdecl;{$ENDIF}
 
   /// <summary>
   ///  GS Argument encoding

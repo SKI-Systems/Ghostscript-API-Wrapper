@@ -30,6 +30,7 @@
           </SearchPaths>
           <Parsing>
             <SyntaxOptions>
+              <SyntaxMode Value="Delphi"/>
               <IncludeAssertionCode Value="True"/>
             </SyntaxOptions>
           </Parsing>
@@ -41,6 +42,9 @@
               <StackChecks Value="True"/>
             </Checks>
             <VerifyObjMethodCallValidity Value="True"/>
+            <Optimizations>
+              <OptimizationLevel Value="0"/>
+            </Optimizations>
           </CodeGeneration>
           <Linking>
             <Debugging>
@@ -56,6 +60,12 @@
             </Options>
           </Linking>
           <Other>
+            <Verbosity>
+              <ShowDebugInfo Value="True"/>
+            </Verbosity>
+            <CompilerMessages>
+              <IgnoredMessages idx3187="True"/>
+            </CompilerMessages>
             <CustomOptions Value="-dDEBUG"/>
             <OtherDefines Count="1">
               <Define0 Value="DEBUG"/>

@@ -117,10 +117,6 @@ object FMain: TFMain
     object Tab_PDFView: TTabSheet
       Caption = 'PDF Preview'
       ImageIndex = 1
-      ExplicitLeft = 0
-      ExplicitTop = 0
-      ExplicitWidth = 0
-      ExplicitHeight = 0
       object P_PDF_Top: TPanel
         Left = 0
         Top = 0
@@ -148,10 +144,10 @@ object FMain: TFMain
           BevelInner = bvNone
           BevelOuter = bvNone
           BorderStyle = bsNone
-          EditLabel.Width = 37
+          EditLabel.Width = 31
           EditLabel.Height = 13
           EditLabel.BiDiMode = bdLeftToRight
-          EditLabel.Caption = 'Seiten: '
+          EditLabel.Caption = 'Page: '
           EditLabel.ParentBiDiMode = False
           LabelPosition = lpLeft
           ReadOnly = True
@@ -177,7 +173,9 @@ object FMain: TFMain
     end
   end
   object OpenDialog: TOpenDialog
-    Filter = 'PDF-Datei (*.pdf)|*.pdf|Alle Dateien (*.*)|*.*'
+    Filter = 
+      'Pdf File (*.pdf)|*.pdf|Postscript File (*.ps)|*.ps|Encapsulated ' +
+      'Postscript File (*.eps)|*.eps|All Files (*.*)|*.*'
     Left = 424
     Top = 128
   end

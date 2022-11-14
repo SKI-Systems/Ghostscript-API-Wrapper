@@ -10,7 +10,8 @@
         <IsPartOfProject Value="True"/>
         <EditorIndex Value="-1"/>
         <CursorPos X="3" Y="12"/>
-        <UsageCount Value="26"/>
+        <UsageCount Value="27"/>
+        <DefaultSyntaxHighlighter Value="Delphi"/>
       </Unit>
       <Unit>
         <Filename Value="Main.pas"/>
@@ -18,25 +19,24 @@
         <ComponentName Value="FMain"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
-        <TopLine Value="223"/>
-        <CursorPos X="5" Y="261"/>
-        <UsageCount Value="26"/>
+        <IsVisibleTab Value="True"/>
+        <CursorPos X="10" Y="30"/>
+        <UsageCount Value="27"/>
         <Loaded Value="True"/>
+        <LoadedDesigner Value="True"/>
       </Unit>
       <Unit>
         <Filename Value="..\..\lib\SkiSys.GS_Api.pas"/>
-        <IsVisibleTab Value="True"/>
-        <EditorIndex Value="1"/>
-        <TopLine Value="60"/>
-        <CursorPos Y="88"/>
-        <FoldState Value=" TJ(Z1;011 pm0oD1D]9lFlW1Ta"/>
-        <UsageCount Value="13"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="1441"/>
+        <CursorPos X="13" Y="1458"/>
+        <UsageCount Value="14"/>
         <Bookmarks Count="3">
           <Item0 X="3" Y="1206" ID="2"/>
           <Item1 Y="1589" ID="3"/>
           <Item2 X="2" Y="86" ID="1"/>
         </Bookmarks>
-        <Loaded Value="True"/>
+        <DefaultSyntaxHighlighter Value="Delphi"/>
       </Unit>
       <Unit>
         <Filename Value="D:\lazarus\fpc\3.2.2\source\packages\rtl-generics\src\generics.collections.pas"/>
@@ -48,9 +48,9 @@
       <Unit>
         <Filename Value="..\..\lib\SkiSys.GS_Converter.pas"/>
         <EditorIndex Value="-1"/>
-        <TopLine Value="214"/>
-        <CursorPos X="19" Y="242"/>
+        <CursorPos X="15" Y="79"/>
         <UsageCount Value="13"/>
+        <DefaultSyntaxHighlighter Value="Delphi"/>
       </Unit>
       <Unit>
         <Filename Value="D:\lazarus\fpc\3.2.2\source\rtl\objpas\classes\classesh.inc"/>
@@ -188,6 +188,7 @@
         <EditorIndex Value="-1"/>
         <CursorPos X="13" Y="108"/>
         <UsageCount Value="13"/>
+        <DefaultSyntaxHighlighter Value="Delphi"/>
       </Unit>
       <Unit>
         <Filename Value="D:\lazarus\lcl\interfaces\win32\win32object.inc"/>
@@ -216,26 +217,36 @@
         <CursorPos X="3" Y="140"/>
         <UsageCount Value="10"/>
       </Unit>
+      <Unit>
+        <Filename Value="..\..\LazarusTest\maintest.pas"/>
+        <ComponentName Value="FMainTest"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+        <UnitName Value="MainTest"/>
+        <EditorIndex Value="-1"/>
+        <UsageCount Value="10"/>
+        <DefaultSyntaxHighlighter Value="Delphi"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\..\lib\SkiSys.GS_ParameterTypes.pas"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="488"/>
+        <CursorPos X="45" Y="514"/>
+        <UsageCount Value="10"/>
+        <DefaultSyntaxHighlighter Value="Delphi"/>
+      </Unit>
     </Units>
     <OtherDefines Count="1">
       <Define0 Value="DEBUG"/>
     </OtherDefines>
-    <JumpHistory HistoryIndex="3">
+    <JumpHistory HistoryIndex="1">
       <Position>
         <Filename Value="Main.pas"/>
-        <Caret Line="220" TopLine="190"/>
+        <Caret Line="339" TopLine="310"/>
       </Position>
       <Position>
         <Filename Value="Main.pas"/>
-        <Caret Line="221" TopLine="190"/>
-      </Position>
-      <Position>
-        <Filename Value="Main.pas"/>
-        <Caret Line="222" TopLine="190"/>
-      </Position>
-      <Position>
-        <Filename Value="Main.pas"/>
-        <Caret Line="261" Column="5" TopLine="223"/>
+        <Caret Line="339" TopLine="310"/>
       </Position>
     </JumpHistory>
     <RunParams>

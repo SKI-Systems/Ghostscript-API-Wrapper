@@ -4,7 +4,7 @@ program GS_API_ExampleLazarus;
 
 uses
   {$IFDEF UNIX}
-  cthreads,
+  cthreads, cmem, ctypes,
   {$ENDIF}
   {$IFDEF HASAMIGA}
   athreads,
@@ -16,7 +16,7 @@ uses
 
 begin
   RequireDerivedFormResource := True;
-  Application.Scaled:=True;
+			Application.Scaled:=True;
   Application.Initialize;
   Application.CreateForm(TFMain, FMain);
   Application.Run;

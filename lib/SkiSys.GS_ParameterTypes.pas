@@ -46,30 +46,67 @@ uses
     , System.Classes, System.SysUtils, WinApi.Windows, Vcl.Graphics
   {$ENDIF}
   {$IFDEF FPC}
-    , Classes, SysUtils, Windows, Graphics
+    , Classes, SysUtils, Graphics
+    {$IFDEF MSWINDOWS}
+    , Windows
+    {$ENDIF}
+    {$IFDEF UNIX}
+    , Unix, LCLIntf, LCLType
+    {$ENDIF}
   {$ENDIF}
     ;
 
 type
+
+  { TGSDisplayFormat }
+
+  /// <summary>
+  ///  Integration of the Display Mask
+  /// </summary>
+  TGSDisplayFormat = record
+  private
+    function GetAlpha: Integer;
+    function GetColor: Integer;
+    function GetDepth: Integer;
+    function GetEndian: Integer;
+    function GetFirstRow: Integer;
+    function GetNative555: Integer;
+    function GetRowAlign: Integer;
+  public
+    Format: Cardinal;
+    property Alpha: Integer read GetAlpha;
+    property Color: Integer read GetColor;
+    property Depth: Integer read GetDepth;
+    property Endian: Integer read GetEndian;
+    property FirstRow: Integer read GetFirstRow;
+    property Native555: Integer read GetNative555;
+    property RowAlign: Integer read GetRowAlign;
+  end;
+
   /// <summary>
   ///  Default abstract class for Ghostscript parameters
   /// </summary>
   TGSParams = class
-  protected
+  private
     FBatch: Boolean;
     FDevice: string;
     FDDpi: Integer;
     FDisplayFormat: Integer;
+    FFontResourceDir: string;
     FGenericResourceDir: string;
     FNoSaver: Boolean;
+    FNoPagePrompt: Boolean;
     FNoPause: Boolean;
+    FNoPrompt: Boolean;
     FQuiet: Boolean;
+    FShortErrors: Boolean;
     FSources: string;
+  protected
     /// <summary>
     ///  Read the display format and the resolution from the device context of
     ///  the desktop, when they are set to default 0
     /// </summary>
-    procedure GetDisplayFormat; virtual;
+    procedure GetDisplayFormat; overload; virtual;
     /// <summary>
     ///  Set the default values
     /// </summary>
@@ -83,9 +120,15 @@ type
     /// </summary>
     property Sources: string read FSources;
   public (*** PROPERTIES ***)
+    /// <summary>
+    ///  Causes Ghostscript to exit after processing all files named on the
+    ///  command line, rather than going into an interactive loop reading
+    ///  PostScript commands. Equivalent to putting -c quit at the end of the
+    ///  command line.
+    /// </summary>
     property Batch: Boolean read FBatch write FBatch;
     /// <summary>
-    ///  Set the
+    ///  Set the dpi in display mode
     /// </summary>
     property DDpi: Integer read FDDpi write FDDpi;
     /// <summary>
@@ -93,28 +136,87 @@ type
     /// </summary>
     property Device: string read FDevice write FDevice;
     /// <summary>
-    ///
+    ///  The DisplayFormat is used in device="display" tp specify the output.
+    ///  The constants are declared in the unit SkiSys.GS_gdevdsp
     /// </summary>
     property DisplayFormat: Integer read FDisplayFormat write FDisplayFormat;
     /// <summary>
-    ///
+    ///  Specifies a path where font files are installed. It’s meaning is similar
+    ///  to GenericResourceDir.
+    ///  Default value is (./Font/) for Unix, and an equivalent one on other platforms.
+    /// </summary>
+    property FontResourceDir: string read FFontResourceDir write FFontResourceDir;
+    /// <summary>
+    ///  Specifies a path to resource files. The value is platform dependent.
+    ///  It must end with a directory separator. A note for Windows users, Artifex
+    ///  recommends the use of the forward slash delimiter due to the special
+    ///  interpretation of \" by the Microsoft C startup code. See Parsing C
+    ///  Command-Line Arguments for more information.
+    ///  Adobe specifies GenericResourceDir to be an absolute path to a single
+    ///  resource directory. Ghostscript instead maintains multiple resource
+    ///  directories and uses an extended method for finding resources, which
+    ///  is explained in “Finding PostScript Level 2 resources”.
+    ///  Due to the extended search method, Ghostscript uses GenericResourceDir
+    ///  only as a default directory for resources being not installed.
+    ///  Therefore GenericResourceDir may be considered as a place where new
+    ///  resources to be installed. The default implementation of the function
+    ///  ResourceFileName uses GenericResourceDir when it is an absolute path,
+    ///  or when the resource file is absent.
+    ///  The extended search method does not call ResourceFileName.
+    ///  Default value is (./Resource/) for Unix, and an equivalent one on
+    ///  other platforms.
+    /// </summary>
+    property GenericResourceDir: string read FGenericResourceDir
+                                        write FGenericResourceDir;
+    /// <summary>
+    ///  Equivalent to -dDELAYSAFER.
+    ///  This flag disables SAFER mode until the .setsafe procedure is run.
+    ///  This is intended for clients or scripts that cannot operate in SAFER mode.
+    ///  If Ghostscript is started with -dNOSAFER or -dDELAYSAFER, PostScript
+    ///  programs are allowed to read, write, rename or delete any files in the
+    ///  system that are not protected by operating system permissions.
     /// </summary>
     property NoSaver: Boolean read FNoSaver write FNoSaver;
     /// <summary>
-    ///
+    ///  Disables only the prompt, but not the pause, at the end of each page.
+    ///  This may be useful on PC displays that get confused if a program
+    ///  attempts to write text to the console while the display is in a graphics mode.
+    /// </summary>
+    property NoPagePrompt: Boolean read FNoPagePrompt write FNoPagePrompt;
+    /// <summary>
+    ///  Disables the prompt and pause at the end of each page. Normally one
+    ///  should use this (along with -dBATCH) when producing output on a printer
+    ///  or to a file; it also may be desirable for applications where another
+    ///  program is “driving” Ghostscript.
     /// </summary>
     property NoPause: Boolean read FNoPause write FNoPause;
     /// <summary>
-    ///
+    ///  Disables the prompt printed by Ghostscript when it expects interactive
+    ///  input, as well as the end-of-page prompt (-dNOPAGEPROMPT).
+    ///  This allows piping input directly into Ghostscript, as long as the
+    ///  data doesn’t refer to currentfile.
+    /// </summary>
+    property NoPrompt: Boolean read FNoPrompt write FNoPrompt;
+    /// <summary>
+    ///  Suppresses routine information comments on standard output. This is
+    ///  currently necessary when redirecting device output to standard output.
     /// </summary>
     property Quiet: Boolean read FQuiet write FQuiet;
+    /// <summary>
+    ///  Makes certain error and information messages more Adobe-compatible.
+    /// </summary>
+    property ShortErrors: Boolean read FShortErrors write FShortErrors;
   public (*** METHODS ***)
     /// <summary>
-    ///
+    ///  Adds a source path to Ghostscript
     /// </summary>
     procedure AddSourcePath(APath: string);
     // constructor
     constructor Create; reintroduce;
+    /// <summary>
+    ///  Get the GS DisplayFormat platform independent
+    /// </summary>
+    class function GetDisplayFormat(AColorDepth: Integer): Integer; overload; virtual;
     /// <summary>
     ///  Get the full Linux file path to avoid Ghostscript Errors
     /// </summary>
@@ -122,12 +224,12 @@ type
     ///  a case sensitive Linux file name, when the file doesn't exist an
     ///  EFileNotFoundException will be raised
     /// </returns>
-    function GetFullLinuxFilePath(AFile: string; IgnoreMatch: Boolean = False): string;
+    class function GetFullLinuxFilePath(AFile: string; IgnoreMatch: Boolean = False): string;
     /// <summary>
     ///  Replace all backslashes with slashes and remove all double backslashes
     ///  from the path
     /// </summary>
-    function GetLinuxFilePath(AFile: string): string; virtual;
+    class function GetLinuxFilePath(AFile: string): string; virtual;
     procedure SetParam(Value, Default: Boolean; Name: string; AParams: TStringList); overload;
     procedure SetParam(Value, Default: string; Name: string; AParams: TStringList); overload;
     procedure SetParam(Value, Default: Integer; Name: string; AParams: TStringList); overload;
@@ -213,7 +315,7 @@ type
     procedure SetDefaultValues; override;
   public
     /// <summary>
-    ///
+    ///  When specified Ghostscript will change the images in the output
     /// </summary>
     property ColorConversionStrategy: TGSColorConversionStrategy read FColorConversionStrategy
                                                                  write FColorConversionStrategy;
@@ -424,6 +526,44 @@ type
 
 implementation
 
+{$REGION 'TGSDisplayFormat' }
+
+function TGSDisplayFormat.GetAlpha: Integer;
+begin
+  Result := Format and DISPLAY_ALPHA_MASK;
+end;
+
+function TGSDisplayFormat.GetColor: Integer;
+begin
+  Result := Format and DISPLAY_COLORS_MASK;
+end;
+
+function TGSDisplayFormat.GetDepth: Integer;
+begin
+  Result := Format and DISPLAY_DEPTH_MASK;
+end;
+
+function TGSDisplayFormat.GetEndian: Integer;
+begin
+  Result := Format and DISPLAY_ENDIAN_MASK;
+end;
+
+function TGSDisplayFormat.GetFirstRow: Integer;
+begin
+  Result := Format and DISPLAY_FIRSTROW_MASK;
+end;
+
+function TGSDisplayFormat.GetNative555: Integer;
+begin
+  Result := Format and DISPLAY_555_MASK;
+end;
+
+function TGSDisplayFormat.GetRowAlign: Integer;
+begin
+  Result := Format and DISPLAY_ROW_ALIGN_MASK;
+end;
+
+{$ENDREGION}
 
 {$REGION 'TGSParams' }
 
@@ -434,7 +574,8 @@ begin
   if (DirectoryExists(APath)) then
   begin
     AIncludePath := GetLinuxFilePath(APath);
-    // all GS pathes has to end with a '/' or a '\'
+    // all GS pathes has to end with a '/', because we converted the path to a
+    // Linux path to avoid errors on windows
     if (not AIncludePath.EndsWith('/')) then
       AIncludePath := AIncludePath + '/';
     if (not FSources.Contains(AIncludePath)) then
@@ -459,42 +600,49 @@ var
   Depth: Integer;
 begin
   FDisplayFormat := DISPLAY_COLORS_NATIVE or DISPLAY_ALPHA_NONE or
-		        DISPLAY_DEPTH_1 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST;
-  DC := GetDC(0);	//* get hdc for desktop */
+	                      DISPLAY_DEPTH_1 or DISPLAY_LITTLEENDIAN or
+                        DISPLAY_BYTE_ORIENTATION;
+
+  DC := GetDC(0); // get hdc for desktop
   try
     depth := GetDeviceCaps(DC, PLANES) * GetDeviceCaps(DC, BITSPIXEL);
+    FDisplayFormat := GetDisplayFormat(depth);
     if (FDDpi = 0) then
       FDDpi := GetDeviceCaps(DC, LOGPIXELSY);
-    if (depth = 32) then
-    begin
-      FDisplayFormat := DISPLAY_COLORS_RGB or DISPLAY_UNUSED_LAST or
-                DISPLAY_DEPTH_8 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST;
-    end else
-    if (depth = 16) then
-    begin
-      FDisplayFormat := DISPLAY_COLORS_NATIVE or DISPLAY_ALPHA_NONE or
-                DISPLAY_DEPTH_16 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST or
-                DISPLAY_NATIVE_555;
-    end else
-    if (depth > 8) then
-    begin
-      FDisplayFormat := DISPLAY_COLORS_RGB or DISPLAY_ALPHA_NONE or
-                DISPLAY_DEPTH_8 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST;
-    end else
-    if (depth >= 8) then
-    begin
-      FDisplayFormat := DISPLAY_COLORS_NATIVE or DISPLAY_ALPHA_NONE or
-                DISPLAY_DEPTH_8 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST;
-    end else
-    if (depth >= 4) then
-      FDisplayFormat := DISPLAY_COLORS_NATIVE or DISPLAY_ALPHA_NONE or
-                DISPLAY_DEPTH_4 or DISPLAY_LITTLEENDIAN or DISPLAY_BOTTOMFIRST;
   finally
     DeleteDC(DC);
   end;
 end;
 
-function TGSParams.GetFullLinuxFilePath(AFile: string; IgnoreMatch: Boolean): string;
+class function TGSParams.GetDisplayFormat(AColorDepth: Integer): Integer;
+begin
+  Result := DISPLAY_COLORS_NATIVE or DISPLAY_ALPHA_NONE or
+		        DISPLAY_DEPTH_1 or DISPLAY_ENDIAN_OS or DISPLAY_BYTE_ORIENTATION;
+  if (AColorDepth = 32) then
+    Result := DISPLAY_COLORS_RGB or
+              {$IFDEF MSWINDOWS}DISPLAY_UNUSED_LAST{$ENDIF}
+              {$IFDEF UNIX}DISPLAY_UNUSED_FIRST{$ENDIF} or
+              DISPLAY_DEPTH_8 or DISPLAY_ENDIAN_OS or DISPLAY_BYTE_ORIENTATION
+  else
+  if (AColorDepth = 16) then
+    Result := DISPLAY_COLORS_NATIVE or DISPLAY_ALPHA_NONE or
+              DISPLAY_DEPTH_16 or DISPLAY_ENDIAN_OS or DISPLAY_BYTE_ORIENTATION or
+              DISPLAY_NATIVE_555
+  else
+  if (AColorDepth > 8) then
+    Result := DISPLAY_COLORS_RGB or DISPLAY_ALPHA_NONE or
+              DISPLAY_DEPTH_8 or DISPLAY_ENDIAN_OS or DISPLAY_BYTE_ORIENTATION
+  else
+  if (AColorDepth >= 8) then
+    Result := DISPLAY_COLORS_NATIVE or DISPLAY_ALPHA_NONE or
+              DISPLAY_DEPTH_8 or DISPLAY_ENDIAN_OS or DISPLAY_BYTE_ORIENTATION
+  else
+  if (AColorDepth >= 4) then
+    Result := DISPLAY_COLORS_NATIVE or DISPLAY_ALPHA_NONE or
+              DISPLAY_DEPTH_4 or DISPLAY_ENDIAN_OS or DISPLAY_BYTE_ORIENTATION;
+end;
+
+class function TGSParams.GetFullLinuxFilePath(AFile: string; IgnoreMatch: Boolean): string;
 var
   ACaseMatch: TFilenameCaseMatch;
 begin
@@ -505,15 +653,19 @@ begin
     raise EFileNotFoundException.CreateFmt('file %s not found', [AFile]);
 end;
 
-function TGSParams.GetLinuxFilePath(AFile: string): string;
+class function TGSParams.GetLinuxFilePath(AFile: string): string;
+const
+  DoubleDirSeperator = DirectorySeparator + DirectorySeparator;
 begin
   Result := AFile;
-  while (Result.Contains('\\')) do
-    Result := Result.Replace('\\', '/');
+  while (Result.Contains(DoubleDirSeperator)) do
+    Result := Result.Replace(DoubleDirSeperator, DirectorySeparator);
+  {$IFDEF MSWINDOWS}
   Result := Result.Replace('\', '/');
+  {$ENDIF}
 end;
 
-procedure TGSParams.SetParam(Value, Default, Name: string;
+procedure TGSParams.SetParam(Value, Default: string; Name: string;
   AParams: TStringList);
 begin
   if (Value <> Default) then
@@ -538,18 +690,23 @@ end;
 
 procedure TGSParams.SetParameters(AParams: TStringList);
 begin
+  SetParam(FQuiet, False, '-dQUIET', AParams);
+  SetParam(FBatch, False, '-dBATCH', AParams);
+  SetParam(FNoPagePrompt, False, '-dNOPAGEPROMPT', AParams);
+  SetParam(FNoPause, False, '-dNOPAUSE', AParams);
+  SetParam(FNoPrompt, False, '-dNOPROMPT', AParams);
+  SetParam(FNoSaver, False, '-dNOSAVER', AParams);
+  SetParam(FShortErrors, False, '-dSHORTERRORS', AParams);
   SetParam(FDevice, '', '-sDEVICE=', AParams);
   // if a display device is choosen and the Display Format isn't set -> get it from the system
   if (LowerCase(FDevice) = DISPLAY_DEVICE_NAME) and (FDisplayFormat = 0) then
     GetDisplayFormat;
   SetParam(FDisplayFormat, 0, '-dDisplayFormat=', AParams);
   SetParam(FDDpi, 0, '-dDisplayResolution=', AParams);
-  SetParam(FQuiet, False, '-q', AParams);
-  SetParam(FBatch, False, '-dBATCH', AParams);
-  SetParam(FNoSaver, False, '-dNOSAVER', AParams);
-  SetParam(FNoPause, False, '-dNOPAUSE', AParams);
   if (FSources <> '') then
     AParams.Add('-I' + FSources);
+  SetParam(FFontResourceDir, '', '-sFontResourceDir=', AParams);
+  SetParam(FGenericResourceDir, '', '-sGenericResourceDir=', AParams);
 end;
 
 procedure TGSParams.SetParam(Value, Default: Boolean; Name: string;
@@ -605,6 +762,7 @@ end;
 
 procedure TPDFParams.SetParams(AParams: TStringList);
 begin
+  SetParameters(AParams);
   if (FColorConversionStrategy <> ccsNone) then
     AParams.Add('-sColorConversionStrategy=' + GetColorConversionStrategy);
   SetParam(FEmbededFonts, False, '-dEmbedAllFonts=', AParams);
@@ -626,7 +784,6 @@ begin
   SetParam(FLastPage, -1, '-dLastPage=', AParams);
   SetParam(FPageList, '', '-sPageList=', AParams);
   SetParam(FSubsetFonts, True, '-dSubsetFonts=', AParams);
-  SetParameters(AParams);
 end;
 
 procedure TPDFParams.SetPdfA(const Value: Boolean);
@@ -678,7 +835,7 @@ var
 begin
   if (PdfA) or (PdfX) then
   begin
-    APath := ExtractFilePath(ICCProfile.Replace('/', '\'));
+    APath := ExtractFilePath(ICCProfile{$IFDEF MSWINDOWS}.Replace('/', '\'){$ENDIF});
     AddSourcePath(APath);
   end;
   inherited;

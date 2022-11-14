@@ -28,14 +28,25 @@
 unit SkiSys.GS_ParameterConst;
 // gs params shown on this page: https://www.ghostscript.com/doc/current/Use.htm
 
+{$IFNDEF FPC}
+  {$DEFINE DELPHI}
+{$ENDIF}
+
 interface
 
+uses
+  SkiSys.GS_gdevdsp, SysUtils;
 
 const
   // description of the parameters for ghostscript
-  // https://www.ghostscript.com/doc/current/Use.htm
+  // https://ghostscript.readthedocs.io/en/latest/Use.html
+
+
   PDFACompatibilityPolicyFmt = 'dPDFACompatibilityPolicy=%d';
 
+{$IFDEF DELPHI}
+  DirectorySeparator = PathDelim;
+{$ENDIF}
 
 type
   TDEVICES_HIGH_LEVEL = (
@@ -48,6 +59,12 @@ const
     'pxlcolor', 'docxwrite');
 
   DISPLAY_DEVICE_NAME = 'display';
+
+  DISPLAY_BYTE_ORIENTATION =
+    {$IFDEF MSWINDOWS}DISPLAY_BOTTOMFIRST{$ELSE}DISPLAY_TOPFIRST{$ENDIF};
+  DISPLAY_ENDIAN_OS =
+    {$IFDEF MACOS}DISPLAY_BIGENDIAN{$ELSE}DISPLAY_LITTLEENDIAN{$ENDIF};
+
 
 type
   /// <summary>  <param/>

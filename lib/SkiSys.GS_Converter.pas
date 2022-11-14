@@ -201,7 +201,7 @@ begin
   Params.EmbededFonts := False;
   Params.SubsetFonts := True;
   Params.Pdfa := False;
-  FPDFAX_DefFile := ADllPath + '\PDFA_def.ps';
+  FPDFAX_DefFile := ADllPath + PathDelim + 'PDFA_def.ps';
 end;
 
 function TGS_PdfConverter.InitWithArgs(AStrings: TStrings; Threaded: Boolean): Boolean;

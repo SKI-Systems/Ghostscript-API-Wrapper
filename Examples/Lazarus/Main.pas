@@ -32,28 +32,38 @@ interface
 uses
   SkiSys.GS_Api, SkiSys.GS_Converter, SkiSys.GS_ParameterConst,
 
-  SysUtils, Variants, Classes, Controls, Forms, Windows, LCLProc,
-  Dialogs, StdCtrls, Buttons, ExtCtrls, IniFiles, ComCtrls, Graphics;
+  SysUtils, Variants, Classes, Controls, Forms, LCLProc,
+  Dialogs, StdCtrls, Buttons, ExtCtrls, IniFiles, ComCtrls, Graphics
+  {$IFDEF MSWINDOWS}
+  , Windows
+  {$ENDIF}
+  ;
 
 type
+
+  { TFMain }
+
   TFMain = class(TForm)
+    Btn_Convert: TButton;
+    Img_Page: TImage;
+    LEd_File: TLabeledEdit;
+    LEd_PageCount: TLabeledEdit;
+    M_Errors: TMemo;
+    M_Output: TMemo;
+    M_UserParams: TMemo;
     OpenDialog: TOpenDialog;
     Pages: TPageControl;
-    Tab_Operation: TTabSheet;
-    BBtn_Test: TBitBtn;
-    LEd_PdfFile: TLabeledEdit;
-    SBtn_OpenFile: TSpeedButton;
-    M_UserParams: TMemo;
-    M_Output: TMemo;
-    M_Errors: TMemo;
-    Tab_PDFView: TTabSheet;
-    P_PDF_Top: TPanel;
-    UpDown_Pages: TUpDown;
-    LEd_PageCount: TLabeledEdit;
-    ScrollBoxImage: TScrollBox;
-    Img_Page: TImage;
+    P_Client: TPanel;
+    P_PreviewTop: TPanel;
+    P_Top: TPanel;
     RGrp_Devices: TRadioGroup;
-    procedure BBtn_TestClick(Sender: TObject);
+    SBtn_OpenFile: TSpeedButton;
+    ScrollBox1: TScrollBox;
+    Splitter1: TSplitter;
+    Splitter_Top: TSplitter;
+    Tab_Operation: TTabSheet;
+    Tab_PdfView: TTabSheet;
+    procedure Btn_ConvertClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure SBtn_OpenFileClick(Sender: TObject);
@@ -64,6 +74,7 @@ type
     GSDllDir: string;
     ICCProfileDir: string;
     Ini: TIniFile;
+    procedure AfterExecute(Sender: TObject);
     function GetOutputDir(ADir, AName: string): string;
     procedure ReadIni;
     procedure SetCursorToEnd(AMemo: TMemo);
@@ -72,7 +83,6 @@ type
     procedure StdError(const AText: string);
     procedure StdIn(const AText: string);
     procedure StdOut(const AText: string);
-    procedure ThreadFinished(Sender: TObject);
   protected
     procedure Convert;
     procedure Convert_DisplayPdf(SearchDir, InputFile: string; UseThread: Boolean);
@@ -90,7 +100,19 @@ implementation
 
 {$R *.lfm}
 
-procedure TFMain.BBtn_TestClick(Sender: TObject);
+procedure TFMain.AfterExecute(Sender: TObject);
+begin
+  Screen.Cursor := crDefault;
+  if (PDFConvert.LastErrorCode < 0) then
+    MessageDlg(PDFConvert.LastErrors, mtError, [mbOK], 0);
+  Btn_Convert.Enabled := True;
+  SetPage(0);
+  // Show the Preview, if created -> only availible with Device := 'display'
+  if (RGrp_Devices.ItemIndex in [0, 1]) and (PDFConvert.LastErrorCode = 0) then
+    Pages.ActivePage := Tab_PDFView;
+end;
+
+procedure TFMain.Btn_ConvertClick(Sender: TObject);
 begin
   Convert;
 end;
@@ -104,16 +126,20 @@ begin
   if (not DirectoryExists(ADir)) then
     ADir := '';
 
+  //fix an issue with the speed button on different platforms
+  {$IFDEF MSWINDOWS}SBtn_OpenFile.Top := LEd_File.Top - 2{$ENDIF};
+
   // create an API Converter instance
   PDFConvert := TGS_PdfConverter.Create(ADir);
   // set the events for the Ghostscript and Wrapper output
-  PDFConvert.OnStdError := @StdError;
-  PDFConvert.OnStdIn := @StdIn;
-  PDFConvert.OnStdOut := @StdOut;
+  PDFConvert.OnAfterExecute := AfterExecute;
+  PDFConvert.OnStdError := StdError;
+  PDFConvert.OnStdIn := StdIn;
+  PDFConvert.OnStdOut := StdOut;
   // When you don't want to use the events, you can use the Log instead
+  //PDFConvert.LastErrors;
   //PDFConvert.StdInLog;
   //PDFConvert.StdOutLog;
-
 
   Pages.ActivePage := Tab_Operation;
   FCurrentPage := 0;
@@ -124,34 +150,36 @@ procedure TFMain.FormDestroy(Sender: TObject);
 begin
   if (Ini <> nil) then
   begin
-    Ini.WriteString('Path', 'LastFile', LEd_PdfFile.Text);
+    Ini.WriteString('Path', 'LastFile', LEd_File.Text);
     Ini.WriteString('Path', 'GS_DLL_Path', GSDllDir);
     Ini.WriteString('Path', 'ICCProfileDir', ICCProfileDir);
     Ini.WriteString('User', 'Params', M_UserParams.Lines.Text.Replace(#13#10, '*#*'));
     Ini.WriteInteger('User', 'ConvertDevice', RGrp_Devices.ItemIndex);
     FreeAndNil(Ini);
   end;
-  if (PDFConvert <> nil) then
-    FreeAndNil(PDFConvert);
+  FreeAndNil(PDFConvert);
 end;
 
 function TFMain.GetOutputDir(ADir, AName: string): string;
 begin
-  Result := ADir + AName + '\';
+  Result := ADir + AName + PathDelim;
   if (not DirectoryExists(Result)) then
     CreateDir(Result);
 end;
 
 procedure TFMain.ReadIni;
+const
+  DefaultLib = '..' + PathDelim + '..' + PathDelim + 'bin';
+  DefaultICCProfiles = '..' + PathDelim + '..' + PathDelim + 'ICC-Profiles';
 var
   AFile: string;
 begin
   // read stored user informations from the ini file
   AFile := ChangeFileExt(Application.ExeName, '.ini');
   Ini := TIniFile.Create(AFile);
-  GSDllDir := Ini.ReadString('Path', 'GS_DLL_Path', '..\..\bin');
-  ICCProfileDir := Ini.ReadString('Path', 'ICCProfileDir', '..\..\ICC-Profiles');
-  LEd_PdfFile.Text := Ini.ReadString('Path', 'LastFile', '');
+  GSDllDir := Ini.ReadString('Path', 'GS_DLL_Path', DefaultLib);
+  ICCProfileDir := Ini.ReadString('Path', 'ICCProfileDir', DefaultICCProfiles);
+  LEd_File.Text := Ini.ReadString('Path', 'LastFile', '');
   M_UserParams.Lines.Text := Ini.ReadString('User', 'Params', '').Replace('*#*', #13#10);
   RGrp_Devices.ItemIndex := Ini.ReadInteger('User', 'ConvertDevice', 0);
 end;
@@ -159,7 +187,7 @@ end;
 procedure TFMain.SBtn_OpenFileClick(Sender: TObject);
 begin
   if (OpenDialog.Execute) then
-    LEd_PdfFile.Text := OpenDialog.FileName;
+    LEd_File.Text := OpenDialog.FileName;
 end;
 
 procedure TFMain.SetCursorToEnd(AMemo: TMemo);
@@ -169,7 +197,7 @@ begin
   begin
     SelStart := Length(Text);
     SelLength := 0;
-    Perform(EM_SCROLLCARET, 0, 0);
+    {$IFDEF MSWINDOWS}Perform(EM_SCROLLCARET, 0, 0);{$ENDIF}
   end;
 end;
 
@@ -226,19 +254,19 @@ var
   ADir, AFile, AProfileDir: string;
   AThread: Boolean;
 begin
-  BBtn_Test.Enabled := False;
+  Btn_Convert.Enabled := False;
   Screen.Cursor := crHourGlass;
-  AFile := LEd_PdfFile.Text;
+  AFile := LEd_File.Text;
   AThread := True; // run it in a thread to prevent the gui from freezing
 
   try
     if (not FileExists(AFile)) then
       raise EFileNotFoundException.CreateFmt('The file: %s does not exist', [AFile]);
 
-    ADir := ExtractFilePath(ParamStr(0)) + '\';
-    AProfileDir := ICCProfileDir + '\';
-
-    PDFConvert.OnAfterExecute := @ThreadFinished;
+    ADir := ExtractFilePath(ParamStr(0));
+    AProfileDir := ICCProfileDir;
+    if (not AProfileDir.EndsWith(PathDelim)) then
+      AProfileDir := AProfileDir + PathDelim;
 
 {$IFDEF DEBUG}
     (* You can set different debug options for th API *)
@@ -246,10 +274,9 @@ begin
     // shows the parameters and other informations in the OnStdOut
     PDFConvert.Debug := True;
     // shows the used parameters as cmd args
-    // the output is without "" you have to fix this by your self
     PDFConvert.DebugShowCmdArgs := True;
+
     // shows the communictaion of Ghostscript with API, if you use
-    // PDFConvert.Params.Device = 'display';
     PDFConvert.GSDisplay.Debug := True;
 
     // debug options for Ghostscript
@@ -272,7 +299,7 @@ begin
 
   except
     on E: Exception do begin
-      ThreadFinished(nil);
+      AfterExecute(PDFConvert);
       MessageDlg(E.Message, mtError, [mbOK], 0);
     end;
   end;
@@ -340,6 +367,9 @@ begin
 
   PDFConvert.Params.SubsetFonts := False;
   PDFConvert.Params.EmbededFonts := True;
+  // We can convert the file with a different color we have to set both settings.
+  // When you make your own PDFA_def.ps you can define it directly in the
+  // definition file
   PDFConvert.Params.ICCProfile := AICCProfileDir + 'default_cmyk.icc';
   PDFConvert.Params.PDFAOutputConditionIdentifier := 'CMYK';
   // Device-> pdfwrite
@@ -349,18 +379,6 @@ begin
   PDFConvert.UserParams.Add('-sProcessColorModel=DeviceCMYK');
   PDFConvert.UserParams.AddStrings(M_UserParams.Lines);
   PDFConvert.ToPdfa(InputFile, OutputDir + ChangeFileExt(ExtractFileName(InputFile), '.pdf'), UseThread);
-end;
-
-procedure TFMain.ThreadFinished(Sender: TObject);
-begin
-  Screen.Cursor := crDefault;
-  if (PDFConvert.LastErrorCode < 0) then
-    MessageDlg(PDFConvert.LastErrors, mtError, [mbOK], 0);
-  BBtn_Test.Enabled := True;
-  SetPage(0);
-  // Show the Preview, if created -> only availible with Device := 'display'
-  if (RGrp_Devices.ItemIndex in [0, 1]) and (PDFConvert.LastErrorCode = 0) then
-    Pages.ActivePage := Tab_PDFView;
 end;
 
 procedure TFMain.UpDown_PagesClick(Sender: TObject; Button: TUDBtnType);

@@ -8,7 +8,8 @@
 - Page preview as an image
 - Execution of an operation in a single thread
 - Output of debug informations from the wrapper and the Ghostscript library
-- Supports 32-Bit and 64-Bit Windows applications
+- Supports 32-Bit and 64-Bit Windows applications for Delphi
+- Supports 32/64-Bit Windows and Linux applications for FPC/Lazarus
 - Example applications for Delphi and Lazarus
 
 ### Ghostscript 
@@ -16,8 +17,19 @@
 At the following links you can find the [website](https://www.ghostscript.com) and [documentation](https://ghostscript.readthedocs.io) of Ghostscript.
 ![Ghostscript Icon](https://gdm-catalog-fmapi-prod.imgix.net/ProductScreenshot/fdea9f1c-d655-48a3-bb5a-4c51815bb294.png) 
 
+#### Linux install
+
+How to compile Ghostscript on Linux [install guide](https://www.linuxfromscratch.org/blfs/view/svn/pst/gs.html)
 
 ### CHANGELOG
+
+#### version 1.01.0 (FPC Win32/64,Linux and Delphi Win32/64)
+- added Linux support for FPC
+- added color conversion for different displays and improved the preview bitmap
+- changed the Lazarus example platform independent
+- improved internal documentation
+- changed OnStdOut, OnStdIn, OnStdError to thread safe sychronized methods
+- added more parameters to TGS_Params
 
 #### version 1.00.2 (FPC and Delphi Win32/64)
 - added example for Lazarus/FPC and changed folders of the examples
