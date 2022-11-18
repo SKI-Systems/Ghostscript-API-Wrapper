@@ -367,7 +367,7 @@ begin
   // set the printer device for windows
   if (Params.Device <> DEVICES_PRINTERS[MSWindowsPrinter]) then
     Params.Device := DEVICES_PRINTERS[MSWindowsPrinter];
-  if (PrinterName.StartsWith('%printer%')) then
+  if (not PrinterName.StartsWith('%printer%')) then
     Params.OutputFile := '%printer%' + Printername
   else
     Params.OutputFile := Printername;
