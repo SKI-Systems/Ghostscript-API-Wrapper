@@ -37,7 +37,8 @@ unit SkiSys.GS_Converter;
 interface
 
 uses
-  SkiSys.GS_API, SkiSys.GS_ParameterTypes, SkiSys.GS_Errors
+  SkiSys.GS_API, SkiSys.GS_ParameterTypes, SkiSys.GS_ParameterConst,
+  SkiSys.GS_Errors
 {$IFDEF DELPHI}
   , System.Classes, System.SysUtils
 {$ENDIF}
@@ -129,8 +130,8 @@ type
     // destructor
     destructor Destroy; override;
     /// <summary>
-    ///  Print the file on the printer, when the printer doesn't exists the
-    ///  default printer will be used by Ghostscript.
+    ///  Print the file on the printer. When the printer doesn't exists, a printer
+    ///  will be shown under Windows.
     /// </summary>
     /// <param name="InFile">
     ///  The input file(s).
@@ -139,8 +140,8 @@ type
     function Print(InFile: string; PrinterName: string;
                    Threaded: Boolean = False): Boolean; overload;
     /// <summary>
-    ///  Concat the given files and print them as 1 job on the printer, when the
-    ///  printer doesn't exists the default printer will be used by Ghostscript.
+    ///  Concat the given files and print them as 1 job on the printer. When the
+    ///  printer doesn't exists a printer dialog will appear under Windows.
     /// </summary>
     function Print(const InFiles: array of string; PrinterName: string;
                    Threaded: Boolean = False): Boolean; overload;
@@ -265,7 +266,7 @@ end;
 procedure TGS_Converter.SetOutputFile(AList: TStringList; AValue: string);
 begin
   if (AValue <> '') and (not AValue.StartsWith('%')) then
-    AList.Add('-sOutputFile=' + TGSParams.GetFullLinuxFilePath(AValue, True));
+    AList.Add('-sOutputFile=' + TGSParams.GetFullLinuxFilePath(AValue, True))
 end;
 
 procedure TGS_Converter.SetParams(AList: TStringList);
@@ -363,10 +364,16 @@ function TGS_PdfConverter.Print(const InFiles: array of string;
   PrinterName: string; Threaded: Boolean): Boolean;
 begin
   {$IFDEF MSWINDOWS}
-    if (Params.Device = 'pdfwrite') then
-      Params.Device := 'mswinpr2';
+  // set the printer device for windows
+  if (Params.Device <> DEVICES_PRINTERS[MSWindowsPrinter]) then
+    Params.Device := DEVICES_PRINTERS[MSWindowsPrinter];
+  if (PrinterName.StartsWith('%printer%')) then
+    Params.OutputFile := '%printer%' + Printername
+  else
+    Params.OutputFile := Printername;
   {$ENDIF}
-  Result := Convert(InFiles, PrinterName, Threaded);
+  //TODO: Add Linux Printers
+  Result := Convert(InFiles, '', Threaded);
 end;
 
 procedure TGS_PdfConverter.SetParams(AList: TStringList);
