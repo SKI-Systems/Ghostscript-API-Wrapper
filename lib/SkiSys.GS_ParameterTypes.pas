@@ -98,6 +98,7 @@ type
     FNoPagePrompt: Boolean;
     FNoPause: Boolean;
     FNoPrompt: Boolean;
+    FOutputFile: string;
     FQuiet: Boolean;
     FShortErrors: Boolean;
     FSources: string;
@@ -198,6 +199,10 @@ type
     /// </summary>
     property NoPrompt: Boolean read FNoPrompt write FNoPrompt;
     /// <summary>
+    ///
+    /// </summary>
+    property OutputFile: string read FOutputFile write FOutputFile;
+    /// <summary>
     ///  Suppresses routine information comments on standard output. This is
     ///  currently necessary when redirecting device output to standard output.
     /// </summary>
@@ -212,7 +217,11 @@ type
     /// </summary>
     procedure AddSourcePath(APath: string);
     // constructor
-    constructor Create; reintroduce;
+    constructor Create; reintroduce; virtual;
+    /// <summary>
+    ///  set the default values
+    /// </summary>
+    procedure Clear; virtual;
     /// <summary>
     ///  Get the GS DisplayFormat platform independent
     /// </summary>
@@ -588,6 +597,11 @@ begin
     raise EDirectoryNotFoundException.Create('AddSourcePath: directory not found - ' + APath);
 end;
 
+procedure TGSParams.Clear;
+begin
+  SetDefaultValues;
+end;
+
 constructor TGSParams.Create;
 begin
   inherited Create;
@@ -655,11 +669,11 @@ end;
 
 class function TGSParams.GetLinuxFilePath(AFile: string): string;
 const
-  DoubleDirSeperator = DirectorySeparator + DirectorySeparator;
+  DoubleDirSeperator = PathDelim + PathDelim;
 begin
   Result := AFile;
   while (Result.Contains(DoubleDirSeperator)) do
-    Result := Result.Replace(DoubleDirSeperator, DirectorySeparator);
+    Result := Result.Replace(DoubleDirSeperator, PathDelim);
   {$IFDEF MSWINDOWS}
   Result := Result.Replace('\', '/');
   {$ENDIF}
@@ -707,6 +721,7 @@ begin
     AParams.Add('-I' + FSources);
   SetParam(FFontResourceDir, '', '-sFontResourceDir=', AParams);
   SetParam(FGenericResourceDir, '', '-sGenericResourceDir=', AParams);
+  SetParam(FOutputFile, '', '-sOutputFile=', AParams);
 end;
 
 procedure TGSParams.SetParam(Value, Default: Boolean; Name: string;

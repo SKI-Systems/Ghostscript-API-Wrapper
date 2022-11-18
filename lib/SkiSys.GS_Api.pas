@@ -63,7 +63,7 @@ const
   /// <summary>
   ///  The TGS_Api version
   /// </summary>
-  API_VERSION = 1010;
+  API_VERSION = 1011;
   /// <summary>
   ///  Minimum required Ghostscript version, which will be checked in
   ///  <see cref="SkiSys.GS_API|TGS_Revision.CheckRevision"/>
@@ -1482,8 +1482,8 @@ begin
   FDllPath := Trim(ADllPath);
   if (FDllPath <> '') then
   begin
-    if (FDllPath[length(FDllPath)-1] <> '\') then
-      FDllPath := FDllPath + '\';
+    if (not FDllPath.EndsWith(PathDelim)) then
+      FDllPath := FDllPath + PathDelim;
     ADllFile := FDllPath + GS_DLL;
     {$IFDEF MSWINDOWS}
     SetDllDirectory(PChar(FDllPath));
@@ -1535,7 +1535,6 @@ var
   AError: Boolean;
 begin
   AError := False;
-  ClearInternalLog;
   try
     try
       // create a new instance, if gsapi_init_with_args was used before
@@ -1598,6 +1597,7 @@ var
 begin
   if (AStrings <> nil) and (AStrings.Count > 0) then
   begin
+    ClearInternalLog;
     if (Debug) then
     begin
       FDebugLastCmdArgs := GS_CMD_EXE;

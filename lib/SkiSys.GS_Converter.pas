@@ -47,9 +47,9 @@ uses
   ;
 
 type
-  TGS_PdfConverter = class(TGS_Api)
+  TGS_Converter = class(TGS_Api)
   private
-    FPDFAX_DefFile: string;
+    FUserParams: TStringList;
   protected
     /// <summary>
     ///  Check that all InFiles exists
@@ -66,9 +66,21 @@ type
     /// </summary>
     procedure Init(ADllPath: string); override;
     /// <summary>
+    ///  Set the OutputFile as File and expand the filename case sensitiv.
+    /// </summary>
+    /// <remarks>
+    ///  override this function without inherited to specify other OutputFile
+    ///  formats like printers
+    /// </remarks>
+    procedure SetOutputFile(AList: TStringList; AValue: string); virtual;
+    /// <summary>
     ///  Override SetParams to include a list of UserParams
     /// </summary>
     procedure SetParams(AList: TStringList); override;
+    /// <summary>
+    ///  set the value of the private var FUserParams
+    /// </summary>
+    procedure SetUserParameters(const Value: TStringList); virtual;
     /// <summary>
     ///  Set or replace parameters with the UserParams
     /// </summary>
@@ -77,15 +89,38 @@ type
     ///  Will be executed after InitWithArgs is finished
     /// </summary>
     procedure ThreadFinished(Sender: TObject); override;
+  public
+    // destructor
+    destructor Destroy; override;
+    /// <summary>
+    ///  Main function to execute Ghostscript commands
+    /// </summary>
+    function InitWithArgs(AStrings: TStrings; Threaded: Boolean): Boolean; overload;
+  public
+    /// <summary>
+    ///  A list of ghostscript parameters added before InitWithArgs is executed
+    /// </summary>
+    property UserParams: TStringList read FUserParams write SetUserParameters;
+  end;
+
+  TGS_PdfConverter = class(TGS_Converter)
+  private
+    FPDFAX_DefFile: string;
+    FParams: TPDFAXParams;
+  protected
+    /// <summary>
+    ///  initialize the API
+    /// </summary>
+    procedure Init(ADllPath: string); override;
+    /// <summary>
+    ///  Override SetParams to include the TPDFAXParams
+    /// </summary>
+    procedure SetParams(AList: TStringList); override;
   public (*** PROPERTIES AND VARS ***)
     /// <summary>
     ///  Some of the ghostscript parameters they are often used
     /// </summary>
-    Params: TPDFAXParams;
-    /// <summary>
-    ///  A list of ghostscript parameters added before InitWithArgs is executed
-    /// </summary>
-    UserParams: TStringList;
+    property Params: TPDFAXParams read FParams write FParams;
     /// <summary>
     ///  You can set your own PDFA-Definition ps file here.
     /// </summary>
@@ -94,39 +129,62 @@ type
     // destructor
     destructor Destroy; override;
     /// <summary>
-    ///  Combine and convert all InFiles to a PDF file
+    ///  Print the file on the printer, when the printer doesn't exists the
+    ///  default printer will be used by Ghostscript.
     /// </summary>
-    function ToPdf(const InFiles: array of string; OutFile: string; Threaded: Boolean = False): Boolean; overload;
+    /// <param name="InFile">
+    ///  The input file(s).
+    ///  This function checks, if ";" is in the filename and split the files.
+    /// </param>
+    function Print(InFile: string; PrinterName: string;
+                   Threaded: Boolean = False): Boolean; overload;
+    /// <summary>
+    ///  Concat the given files and print them as 1 job on the printer, when the
+    ///  printer doesn't exists the default printer will be used by Ghostscript.
+    /// </summary>
+    function Print(const InFiles: array of string; PrinterName: string;
+                   Threaded: Boolean = False): Boolean; overload;
     /// <summary>
     ///  Convert the InFile to a PDF file
     /// </summary>
+    /// <param name="InFile">
+    ///  The input file(s).
+    ///  This function checks, if ";" is in the filename and split the files.
+    /// </param>
     function ToPdf(InFile, OutFile: string; Threaded: Boolean = False): Boolean; overload;
     /// <summary>
-    ///  Combine and convert all InFiles to a PDF-A file
+    ///  Combine and convert all InFiles to a PDF file
     /// </summary>
-    function ToPdfa(const InFiles: array of string; OutFile: string; Threaded: Boolean = False): Boolean; overload;
+    function ToPdf(const InFiles: array of string; OutFile: string;
+                   Threaded: Boolean = False): Boolean; overload;
     /// <summary>
     ///  Convert the InFile to a PDF-A file
     /// </summary>
+    /// <param name="InFile">
+    ///  The input file(s).
+    ///  This function checks, if ";" is in the filename and split the files.
+    /// </param>
     function ToPdfa(InFile, OutFile: string; Threaded: Boolean = False): Boolean; overload;
     /// <summary>
-    ///  Main function to execute Ghostscript commands
+    ///  Combine and convert all InFiles to a PDF-A file
     /// </summary>
-    function InitWithArgs(AStrings: TStrings; Threaded: Boolean): Boolean; overload;
+    function ToPdfa(const InFiles: array of string; OutFile: string;
+                    Threaded: Boolean = False): Boolean; overload;
   end;
 
 implementation
 
-{$REGION 'TGS_PdfConverter' }
+{$REGION 'TGS_Converter'}
 
-function TGS_PdfConverter.CheckFiles(const InFiles: array of string): Boolean;
+function TGS_Converter.CheckFiles(const InFiles: array of string): Boolean;
 var
   i: Integer;
 begin
   Result := True;
   for i := 0 to High(InFiles) do
   begin
-    if (not FileExists(InFiles[i])) then
+    // ignore empty items
+    if (not InFiles[i].IsEmpty) and (not FileExists(InFiles[i])) then
     begin
       SetLastError(Format('The File: %s does not exist', [InFiles[i]]));
       Result := False;
@@ -136,14 +194,13 @@ begin
     SetLastErrorCode(gs_error_ioerror); // Error Code defined from Ghostscript
 end;
 
-function TGS_PdfConverter.Convert(const InFiles: array of string;
+function TGS_Converter.Convert(const InFiles: array of string;
   OutFile: string; Threaded: Boolean): Boolean;
 var
   AList, FileList: TStringList;
   i: Integer;
 begin
   Result := False;
-  OutFile := ExpandFileName(OutFile);
 
   if (CheckFiles(InFiles)) then
   begin
@@ -152,23 +209,23 @@ begin
     try
       // Expand all Filenames to a Full Path
       for i := Low(InFiles) to High(InFiles) do
-        FileList.Add(InFiles[i]);
+        if (not InFiles[i].IsEmpty) then
+          FileList.Add(InFiles[i]);
       try
-        Params.SetParams(AList);
         // Set Debug and Other Params
         SetParams(AList);
-        if (OutFile <> '') then
-          AList.Add('-sOutputFile=' + Params.GetFullLinuxFilePath(OutFile, True));
 
+        SetOutputFile(AList, OutFile);
         // All given files have to be in the Linux File Format,
         // otherwise gs may produce device input errors
         // The changes in version 10.00.0 need a case sensitive filename
         // so we add the files case sensitive and in Linux File Format
         for i := 0 to FileList.Count - 1 do
-          AList.Add(Params.GetFullLinuxFilePath(FileList[i]));
+          AList.Add(TGSParams.GetFullLinuxFilePath(FileList[i]));
       except
         on E: Exception do
         begin
+          SetLastError(E.Message);
           ThreadFinished(Self);
         end;
       end;
@@ -179,32 +236,22 @@ begin
       FreeAndNil(FileList);
     end;
   end else
-  if (not Threaded) then
     ThreadFinished(Self);
 end;
 
-destructor TGS_PdfConverter.Destroy;
+destructor TGS_Converter.Destroy;
 begin
-  if (UserParams <> nil) then
-    FreeAndNil(UserParams);
-  if (Params <> nil) then
-    FreeAndNil(Params);
+  FreeAndNil(FUserParams);
   inherited;
 end;
 
-procedure TGS_PdfConverter.Init(ADllPath: string);
+procedure TGS_Converter.Init(ADllPath: string);
 begin
   inherited Init(ADllPath);
-  UserParams := TStringList.Create;
-  Params := TPDFAXParams.Create;
-  // PDFA Params have some default settings, which we have to turn off
-  Params.EmbededFonts := False;
-  Params.SubsetFonts := True;
-  Params.Pdfa := False;
-  FPDFAX_DefFile := ADllPath + PathDelim + 'PDFA_def.ps';
+  FUserParams := TStringList.Create;
 end;
 
-function TGS_PdfConverter.InitWithArgs(AStrings: TStrings; Threaded: Boolean): Boolean;
+function TGS_Converter.InitWithArgs(AStrings: TStrings; Threaded: Boolean): Boolean;
 begin
   // add a threaded methode to execute InitWithArgs
   if (Threaded) then
@@ -215,15 +262,122 @@ begin
     Result := inherited InitWithArgs(AStrings);
 end;
 
-procedure TGS_PdfConverter.ThreadFinished(Sender: TObject);
+procedure TGS_Converter.SetOutputFile(AList: TStringList; AValue: string);
 begin
-  StdOutLine('---  Operation convert finished!  ---');
+  if (AValue <> '') and (not AValue.StartsWith('%')) then
+    AList.Add('-sOutputFile=' + TGSParams.GetFullLinuxFilePath(AValue, True));
+end;
+
+procedure TGS_Converter.SetParams(AList: TStringList);
+begin
   inherited;
+  SetUserParams(AList);
+end;
+
+procedure TGS_Converter.SetUserParameters(const Value: TStringList);
+begin
+  if (Value <> UserParams) then
+  begin
+    UserParams.Clear;
+    if (Value <> nil) then
+      UserParams.Assign(Value);
+  end;
+end;
+
+procedure TGS_Converter.SetUserParams(AParams: TStringList);
+var
+  AParamName, AParam: string;
+  i, j, idx: Integer;
+begin
+  for i := 0 to UserParams.Count - 1 do
+  begin
+    AParam := Trim(UserParams[i]);
+    AParamName := AParam;
+    if (AParamName.StartsWith('-')) then
+    begin
+      //try to find the param name with = at the end
+      idx := AParamName.IndexOf('=');
+      if (idx > -1) then
+        AParamName := AParamName.Substring(0, idx);
+      idx := -1;
+      //TODO: SourceParam (could be not possible to detect)
+      //the source param has no = at the end and we have to find in another way
+
+      // try to find the param in the List
+      for j := 0 to AParams.Count - 1 do
+      begin
+        if (AParams[j].StartsWith(AParamName)) then
+        begin
+          idx := j;
+          break;
+        end;
+      end;
+
+      if (idx > -1) then
+      begin
+        DebugLog(Format('Userparam %s overrides existing parameter %s', [AParam, AParams[idx]]));
+        AParams[idx] := AParam;
+      end else
+      begin
+        AParams.Add(Trim(UserParams[i]));
+        DebugLog(Format('Userparam %s added', [AParam]));
+      end;
+    end;
+  end;
+end;
+
+procedure TGS_Converter.ThreadFinished(Sender: TObject);
+begin
+  inherited;
+  StdOutLine('---  Operation convert finished!  ---');
+end;
+
+{$ENDREGION}
+
+{$REGION 'TGS_PdfConverter' }
+
+destructor TGS_PdfConverter.Destroy;
+begin
+  FreeAndNil(FParams);
+  inherited;
+end;
+
+procedure TGS_PdfConverter.Init(ADllPath: string);
+begin
+  inherited Init(ADllPath);
+  FParams := TPDFAXParams.Create;
+  // PDFA Params have some default settings, which we have to turn off
+  Params.EmbededFonts := False;
+  Params.SubsetFonts := True;
+  Params.Pdfa := False;
+  FPDFAX_DefFile := ADllPath + PathDelim + 'PDFA_def.ps';
+end;
+
+function TGS_PdfConverter.Print(InFile, PrinterName: string;
+  Threaded: Boolean): Boolean;
+begin
+  Result := Print(InFile.Split([';']), PrinterName, Threaded);
+end;
+
+function TGS_PdfConverter.Print(const InFiles: array of string;
+  PrinterName: string; Threaded: Boolean): Boolean;
+begin
+  {$IFDEF MSWINDOWS}
+    if (Params.Device = 'pdfwrite') then
+      Params.Device := 'mswinpr2';
+  {$ENDIF}
+  Result := Convert(InFiles, PrinterName, Threaded);
+end;
+
+procedure TGS_PdfConverter.SetParams(AList: TStringList);
+begin
+  inherited;
+  Params.SetParams(AList);
 end;
 
 function TGS_PdfConverter.ToPdf(InFile, OutFile: string; Threaded: Boolean): Boolean;
 begin
-  Result := Convert([InFile], OutFile, Threaded);
+  Result := Convert(InFile.Split([';']), OutFile, Threaded);
 end;
 
 function TGS_PdfConverter.ToPdf(const InFiles: array of string; OutFile: string;
@@ -250,55 +404,8 @@ end;
 function TGS_PdfConverter.ToPdfa(InFile, OutFile: string; Threaded: Boolean): Boolean;
 begin
   Params.Pdfa := True;
-  Result := Convert([FPDFAX_DefFile ,InFile], OutFile, Threaded);
-end;
 
-procedure TGS_PdfConverter.SetParams(AList: TStringList);
-begin
-  SetUserParams(AList);
-  inherited;
-end;
-
-procedure TGS_PdfConverter.SetUserParams(AParams: TStringList);
-var
-  AParamName, AParam: string;
-  i, j, idx: Integer;
-begin
-  for i := 0 to UserParams.Count - 1 do
-  begin
-    AParam := Trim(UserParams[i]);
-    AParamName := AParam;
-    if (AParamName.StartsWith('-')) then
-    begin
-      //try to find the param name with = at the end
-      idx := AParamName.IndexOf('=');
-      if (idx > -1) then
-        AParamName := AParamName.Substring(0, idx);
-      idx := -1;
-      //TODO: SourceParam
-      //the source param has no = at the end and we have to find otherwise
-
-      // try to find the param in the List
-      for j := 0 to AParams.Count - 1 do
-      begin
-        if (AParams[j].StartsWith(AParamName)) then
-        begin
-          idx := j;
-          break;
-        end;
-      end;
-
-      if (idx > -1) then
-      begin
-        DebugLog(Format('Userparam %s overrides existing parameter %s', [AParam, AParams[idx]]));
-        AParams[idx] := AParam;
-      end else
-      begin
-        AParams.Add(Trim(UserParams[i]));
-        DebugLog(Format('Userparam %s added', [AParam]));
-      end;
-    end;
-  end;
+  Result := ToPdfa(InFile.Split([';']), OutFile, Threaded);
 end;
 
 {$ENDREGION}

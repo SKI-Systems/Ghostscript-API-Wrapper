@@ -44,19 +44,25 @@ const
 
   PDFACompatibilityPolicyFmt = 'dPDFACompatibilityPolicy=%d';
 
-{$IFDEF DELPHI}
-  DirectorySeparator = PathDelim;
-{$ENDIF}
+  FileDelim = ';';
 
 type
   TDEVICES_HIGH_LEVEL = (
     pdfwrite, ps2write, eps2write, txtwrite, xpswrite, pxlmono, pxlcolor, docxwrite
   );
 
+  TDEVICES_PRINTERS = (
+    MSWindowsPrinter
+  );
+
 const
   DEVICES_HIGH_LEVEL: array [TDEVICES_HIGH_LEVEL] of string = (
     'pdfwrite', 'ps2write', 'eps2write', 'txtwrite', 'xpswrite', 'pxlmono',
     'pxlcolor', 'docxwrite');
+
+  DEVICES_PRINTERS: array [TDEVICES_PRINTERS] of string = (
+    'mswinpr2'
+  );
 
   DISPLAY_DEVICE_NAME = 'display';
 

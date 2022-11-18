@@ -23,6 +23,11 @@ How to compile Ghostscript on Linux [install guide](https://www.linuxfromscratch
 
 ### CHANGELOG
 
+#### version 1.01.1 (FPC Win32/64,Linux and Delphi Win32/64)
+- added Print function to the TGS_PDFConverter
+- fixed an issue with the internal log (missing debug informations)
+- fixed an issue that an error wasn't written to the error log
+
 #### version 1.01.0 (FPC Win32/64,Linux and Delphi Win32/64)
 - added Linux support for FPC
 - added color conversion for different displays and improved the preview bitmap
